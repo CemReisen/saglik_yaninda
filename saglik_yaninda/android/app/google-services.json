@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "308628032795",
+    "project_id": "saglik-yaninda-ec8d2",
+    "storage_bucket": "saglik-yaninda-ec8d2.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:308628032795:android:e5cb96a23829c85e5357be",
+        "android_client_info": {
+          "package_name": "com.example.saglik_yaninda"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBBsPdBBnidW4fbtU0rhFh6OZBGSkk9aJE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

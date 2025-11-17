@@ -2,6 +2,9 @@
 import 'package:flutter/material.dart';
 
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:saglik_yaninda/pages/auth/forgot_password_page.dart';
+import 'package:saglik_yaninda/pages/auth/login_page.dart';
+import 'package:saglik_yaninda/pages/auth/register_page.dart';
 
 // Tema dosyamızı içe aktarıyoruz. (renkler, fontlar burada tanımlı)
 import 'core/theme/app_theme.dart';
@@ -16,8 +19,12 @@ import 'package:saglik_yaninda/pages/add_medicine_page.dart';
 import 'package:saglik_yaninda/pages/notifications_page.dart';
 import 'package:saglik_yaninda/pages/profile_page.dart';
 
-// Uygulamanın başlangıç noktası. main() fonksiyonu ilk burada çalışır.
-void main() {
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   runApp(const SaglikYanindaApp());
 }
 
@@ -32,7 +39,13 @@ class SaglikYanindaApp extends StatelessWidget {
           false, // sağ üstteki "debug" yazısını kaldırır
       title: 'Sağlık Yanında', // uygulama başlığı
       theme: buildLightTheme(), // oluşturduğumuz açık tema buradan yüklenir
-      home: const MainLayout(), // uygulama açıldığında ilk gösterilecek sayfa
+      initialRoute: '/login', // uygulama açıldığında ilk gösterilecek sayfa
+      routes: {
+        '/home': (context) => const MainLayout(),
+        '/login': (context) => const LoginPage(),
+        '/register': (context) => const RegisterPage(),
+        '/forgot_password': (context) => const ForgotPasswordPage(),
+      },
     );
   }
 }
