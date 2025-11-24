@@ -57,6 +57,8 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
+  bool _passwordVisible = false;
+
   @override
   Widget build(BuildContext context) {
     const Color mainGreen = Color(0xFF4DB6AC);
@@ -190,6 +192,8 @@ class _LoginPageState extends State<LoginPage> {
     required Color lightGray,
     bool obscure = false,
   }) {
+    bool isPasswordField = label.toLowerCase() == "şifre";
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       margin: const EdgeInsets.only(bottom: 16),
@@ -206,11 +210,31 @@ class _LoginPageState extends State<LoginPage> {
       ),
       child: TextField(
         controller: controller,
-        obscureText: obscure,
+        obscureText: isPasswordField ? !_passwordVisible : false,
         decoration: InputDecoration(
           labelText: label,
           labelStyle: GoogleFonts.poppins(color: Colors.grey[700]),
           border: InputBorder.none,
+
+          suffixIconConstraints: const BoxConstraints(
+            minWidth: 40,
+            minHeight: 40,
+          ),
+
+          suffixIcon: isPasswordField
+              ? IconButton(
+                  icon: Icon(
+                    _passwordVisible ? Icons.visibility : Icons.visibility_off,
+                    color: Colors.grey[700],
+                    size: 22, // ⭐ ideal boyut
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _passwordVisible = !_passwordVisible;
+                    });
+                  },
+                )
+              : null,
         ),
       ),
     );
