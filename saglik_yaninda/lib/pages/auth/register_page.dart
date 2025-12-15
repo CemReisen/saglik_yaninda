@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -45,27 +46,25 @@ class _RegisterPageState extends State<RegisterPage> {
     }
 
     try {
-      // 1) Firebase Auth kullanıcı oluşturma → BURADA USER CREDENTIAL ALIYORUZ
       UserCredential userCredential = await _auth
           .createUserWithEmailAndPassword(email: email, password: password);
 
-      // 2) UID'yi alıyoruz
+      String? token = await FirebaseMessaging.instance.getToken();
+
       String uid = userCredential.user!.uid;
 
-      // 3) Firestore'a kullanıcı kaydı
       await FirebaseFirestore.instance.collection("users").doc(uid).set({
         "uid": uid,
         "email": email,
-        "role": "elder", // şimdilik default
+        "role": "elder",
+        "fcmToken": token,
         "createdAt": FieldValue.serverTimestamp(),
       });
 
-      // 4) Kullanıcıya mesaj göster
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text("Kayıt başarılı!")));
 
-      // 5) Login sayfasına yönlendir
       Navigator.pushReplacementNamed(context, '/login');
     } on FirebaseAuthException catch (e) {
       ScaffoldMessenger.of(
@@ -77,7 +76,6 @@ class _RegisterPageState extends State<RegisterPage> {
   @override
   Widget build(BuildContext context) {
     const Color mainGreen = Color(0xFF4DB6AC);
-    //const Color lightGray = Color(0xFFF5F5F5);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -106,20 +104,16 @@ class _RegisterPageState extends State<RegisterPage> {
                 ),
                 const SizedBox(height: 40),
 
-                // Ad Soyad kartı
                 _buildCard("Ad Soyad"),
 
-                // E-posta kartı
                 _buildCard("E-posta", controller: _emailController),
 
-                // Şifre kartı
                 _buildCard(
                   "Şifre",
                   controller: _passwordController,
                   obscure: true,
                 ),
 
-                // Şifre tekrar kartı
                 _buildCard(
                   "Şifre Tekrar",
                   controller: _confirmPasswordController,
@@ -128,7 +122,6 @@ class _RegisterPageState extends State<RegisterPage> {
 
                 const SizedBox(height: 30),
 
-                // Kayıt Ol butonu
                 SizedBox(
                   width: double.infinity,
                   height: 50,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -14,6 +15,7 @@ class _LoginPageState extends State<LoginPage> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _isLoading = false;
+  bool _rememberMe = true;
 
   @override
   void dispose() {
@@ -38,6 +40,10 @@ class _LoginPageState extends State<LoginPage> {
 
     try {
       await _auth.signInWithEmailAndPassword(email: email, password: password);
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('beni_hatirla', _rememberMe);
+
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
@@ -73,7 +79,6 @@ class _LoginPageState extends State<LoginPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Başlıklar
                 Text(
                   "Sağlık Yanında",
                   style: GoogleFonts.poppins(
@@ -92,43 +97,71 @@ class _LoginPageState extends State<LoginPage> {
                 ),
                 const SizedBox(height: 40),
 
-                // E-posta kartı
                 _buildCard(
                   label: "E-posta",
                   controller: _emailController,
                   lightGray: lightGray,
                 ),
 
-                // Şifre kartı
                 _buildCard(
                   label: "Şifre",
                   controller: _passwordController,
                   lightGray: lightGray,
-                  obscure: true,
+                  isPassword: true,
                 ),
 
                 const SizedBox(height: 10),
 
-                // Şifremi unuttum
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: GestureDetector(
-                    onTap: () =>
-                        Navigator.pushNamed(context, '/forgot_password'),
-                    child: Text(
-                      "Şifremi unuttum?",
-                      style: GoogleFonts.poppins(
-                        color: Colors.grey[700],
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        SizedBox(
+                          height: 24,
+                          width: 24,
+                          child: Checkbox(
+                            value: _rememberMe,
+                            activeColor: const Color(0xFF4DB6AC),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            onChanged: (val) {
+                              setState(() {
+                                _rememberMe = val!;
+                              });
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          "Beni Hatırla",
+                          style: GoogleFonts.poppins(
+                            fontSize: 13,
+                            color: Colors.grey[700],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    GestureDetector(
+                      onTap: () =>
+                          Navigator.pushNamed(context, '/forgot_password'),
+                      child: Text(
+                        "Şifremi unuttum?",
+                        style: GoogleFonts.poppins(
+                          color: Colors.grey[700],
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                 ),
 
                 const SizedBox(height: 30),
 
-                // Giriş yap butonu
                 SizedBox(
                   width: double.infinity,
                   height: 50,
@@ -155,7 +188,6 @@ class _LoginPageState extends State<LoginPage> {
 
                 const SizedBox(height: 20),
 
-                // Alt kısım: kayıt sayfasına geçiş
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -185,15 +217,12 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
-  // Tekrarlanan kart widget'ı
   Widget _buildCard({
     required String label,
     required TextEditingController controller,
     required Color lightGray,
-    bool obscure = false,
+    bool isPassword = false,
   }) {
-    bool isPasswordField = label.toLowerCase() == "şifre";
-
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       margin: const EdgeInsets.only(bottom: 16),
@@ -210,7 +239,8 @@ class _LoginPageState extends State<LoginPage> {
       ),
       child: TextField(
         controller: controller,
-        obscureText: isPasswordField ? !_passwordVisible : false,
+
+        obscureText: isPassword ? !_passwordVisible : false,
         decoration: InputDecoration(
           labelText: label,
           labelStyle: GoogleFonts.poppins(color: Colors.grey[700]),
@@ -221,12 +251,12 @@ class _LoginPageState extends State<LoginPage> {
             minHeight: 40,
           ),
 
-          suffixIcon: isPasswordField
+          suffixIcon: isPassword
               ? IconButton(
                   icon: Icon(
                     _passwordVisible ? Icons.visibility : Icons.visibility_off,
-                    color: Colors.grey[700],
-                    size: 22, // ⭐ ideal boyut
+                    color: Colors.grey[600],
+                    size: 22,
                   ),
                   onPressed: () {
                     setState(() {

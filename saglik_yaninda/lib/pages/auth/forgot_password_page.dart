@@ -81,7 +81,6 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                 ),
                 const SizedBox(height: 40),
 
-                // E-posta kartı
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 16,
@@ -109,7 +108,6 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                   ),
                 ),
 
-                // Gönder butonu
                 SizedBox(
                   width: double.infinity,
                   height: 50,
@@ -136,7 +134,6 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
 
                 const SizedBox(height: 20),
 
-                // Geri dön linki
                 GestureDetector(
                   onTap: () {
                     Navigator.pushReplacementNamed(context, '/login');

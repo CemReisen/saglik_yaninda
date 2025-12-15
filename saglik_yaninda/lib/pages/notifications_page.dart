@@ -6,7 +6,7 @@ class NotificationsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const Scaffold(
-      backgroundColor: Colors.transparent, // ✅ gri zemin korunur
+      backgroundColor: Colors.transparent,
       body: Center(
         child: Text(
           "Bildirimler Sayfası",
