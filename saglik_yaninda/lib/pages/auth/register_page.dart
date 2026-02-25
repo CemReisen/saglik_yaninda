@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'dart:math';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -25,6 +26,17 @@ class _RegisterPageState extends State<RegisterPage> {
     _confirmPasswordController.dispose();
     super.dispose();
   }
+
+  String _selectedRole = "elder";
+
+  String _generateConnectionCode() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    Random rnd = Random();
+    String code = String.fromCharCodes(
+      Iterable.generate(6, (_) => chars.codeUnitAt(rnd.nextInt(chars.length))),
+    );
+    return "${code.substring(0, 3)}-${code.substring(3, 6)}";
+  } // Varsayılan olarak "elder" seçili
 
   Future<void> _register() async {
     final email = _emailController.text.trim();
@@ -50,13 +62,15 @@ class _RegisterPageState extends State<RegisterPage> {
           .createUserWithEmailAndPassword(email: email, password: password);
 
       String? token = await FirebaseMessaging.instance.getToken();
-
       String uid = userCredential.user!.uid;
+
+      String connectionCode = _generateConnectionCode();
 
       await FirebaseFirestore.instance.collection("users").doc(uid).set({
         "uid": uid,
         "email": email,
-        "role": "elder",
+        "role": _selectedRole,
+        "connectionCode": connectionCode,
         "fcmToken": token,
         "createdAt": FieldValue.serverTimestamp(),
       });
@@ -120,7 +134,9 @@ class _RegisterPageState extends State<RegisterPage> {
                   obscure: true,
                 ),
 
-                const SizedBox(height: 30),
+                const SizedBox(height: 10),
+
+                _buildRoleSelector(),
 
                 SizedBox(
                   width: double.infinity,
@@ -204,6 +220,92 @@ class _RegisterPageState extends State<RegisterPage> {
           labelStyle: GoogleFonts.poppins(color: Colors.grey[700]),
           border: InputBorder.none,
         ),
+      ),
+    );
+  }
+
+  //Rol Seçici Widget
+  Widget _buildRoleSelector() {
+    const Color mainGreen = Color(0xFF4DB6AC);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 24),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5F5F5),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: GestureDetector(
+              onTap: () => setState(() => _selectedRole = "elder"),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: BoxDecoration(
+                  color: _selectedRole == "elder"
+                      ? mainGreen
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: _selectedRole == "elder"
+                      ? [
+                          BoxShadow(
+                            color: mainGreen.withOpacity(0.3),
+                            blurRadius: 8,
+                            offset: const Offset(0, 3),
+                          ),
+                        ]
+                      : [],
+                ),
+                child: Center(
+                  child: Text(
+                    "Kendi İlacım",
+                    style: GoogleFonts.poppins(
+                      color: _selectedRole == "elder"
+                          ? Colors.white
+                          : Colors.grey[600],
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: GestureDetector(
+              onTap: () => setState(() => _selectedRole = "caregiver"),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: BoxDecoration(
+                  color: _selectedRole == "caregiver"
+                      ? mainGreen
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: _selectedRole == "caregiver"
+                      ? [
+                          BoxShadow(
+                            color: mainGreen.withOpacity(0.3),
+                            blurRadius: 8,
+                            offset: const Offset(0, 3),
+                          ),
+                        ]
+                      : [],
+                ),
+                child: Center(
+                  child: Text(
+                    "Yakınımın İlacı",
+                    style: GoogleFonts.poppins(
+                      color: _selectedRole == "caregiver"
+                          ? Colors.white
+                          : Colors.grey[600],
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -39,10 +40,24 @@ class _LoginPageState extends State<LoginPage> {
     setState(() => _isLoading = true);
 
     try {
-      await _auth.signInWithEmailAndPassword(email: email, password: password);
+      UserCredential userCredential = await _auth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('beni_hatirla', _rememberMe);
+
+      DocumentSnapshot userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userCredential.user!.uid)
+          .get();
+
+      String role = "elder"; //Varsayılan rol
+      if (userDoc.exists) {
+        var data = userDoc.data() as Map<String, dynamic>;
+        role = data['role'] ?? "elder";
+      }
 
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -50,7 +65,12 @@ class _LoginPageState extends State<LoginPage> {
       ).showSnackBar(const SnackBar(content: Text("Giriş başarılı!")));
 
       if (!mounted) return;
-      Navigator.pushReplacementNamed(context, '/home');
+
+      if (role == "caregiver") {
+        Navigator.pushReplacementNamed(context, '/caregiver_home');
+      } else {
+        Navigator.pushReplacementNamed(context, '/home');
+      }
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
