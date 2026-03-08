@@ -24,11 +24,11 @@
 
 
 
+
+
 | Bakıcı (Caregiver) Paneli | Yakın Ekleme | Profil ve Oyunlaştırma |
 | :---: | :---: | :---: |
-| <img src="assets/screenshots/caregiver.png" width="200"/> | <img src="assets/screenshots/add_relative.png" width="200"/> | <img src="assets/screenshots/profile.png" width="200"/> |
-
-*(Not: Görselleri GitHub reponda `assets/screenshots/` klasörüne isimleri eşleşecek şekilde yüklemelisin.)*
+| <img src="https://github.com/user-attachments/assets/01e7382f-6fb2-4e84-914c-f9c729728c60" width="200"/> | <img src="https://github.com/user-attachments/assets/02d74d54-ea91-4760-8594-79be0026fd93" width="200"/> | <img src="https://github.com/user-attachments/assets/ddda6daf-68e1-40a9-b255-c7104a19d7f1" width="200"/> |
 
 ## 🛠️ Kullanılan Teknolojiler (Tech Stack)
 
