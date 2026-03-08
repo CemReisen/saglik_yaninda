@@ -15,11 +15,13 @@
 * 🏆 **Oyunlaştırma (Gamification):** Kullanıcıların ilaçlarını zamanında içmesini teşvik eden, kümülatif olarak artan "Sağlık Puanı" ve günlük "İlerleme Çubuğu" (Progress Bar).
 * 🛡️ **Veri Tutarlılığı (WriteBatch):** Firestore üzerinde aynı anda yapılan çoklu işlemlerde (Örn: Günde 3 doz ilaç ekleme) veritabanı bütünlüğünü %100 koruyan atomik işlemler.
 
+
 ## 📱 Ekran Görüntüleri
 
 | Giriş ve Kayıt | Ana Sayfa (İlaç Takibi) | Takvim Görünümü |
 | :---: | :---: | :---: |
-| ![loginPage](https://github.com/user-attachments/assets/f8b91caf-e8e6-4ca8-8d25-87cdff393650) | <img src="assets/screenshots/home.png" width="200"/> | <img src="assets/screenshots/calendar.png" width="200"/> |
+| <img src="https://github.com/user-attachments/assets/f8b91caf-e8e6-4ca8-8d25-87cdff393650" width="130"/> | <img src="![homePage](https://github.com/user-attachments/assets/7beefdac-d7db-4976-aa12-ae705caf63ae)" width="200"/> | <![callendarPage](https://github.com/user-attachments/assets/4f0d1917-e80a-49da-99fe-5516d5482274)" width="200"/> |
+
 
 
 | Bakıcı (Caregiver) Paneli | Yakın Ekleme | Profil ve Oyunlaştırma |
