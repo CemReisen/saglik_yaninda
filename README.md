@@ -4,6 +4,12 @@
 ![Firebase](https://img.shields.io/badge/Firebase-FFCA28?style=for-the-badge&logo=firebase&logoColor=white)
 ![Dart](https://img.shields.io/badge/Dart-0175C2?style=for-the-badge&logo=dart&logoColor=white)
 
+![callendarPage](https://github.com/user-attachments/assets/866750eb-30ba-460d-a9af-bdc27060062e)
+![registerPage](https://github.com/user-attachments/assets/5fb28508-ede7-426a-9e7a-1b160a3863fe)
+![homePage](https://github.com/user-attachments/assets/6ee9df40-d821-4083-a043-2a15c75613e1)
+![loginPage](https://github.com/user-attachments/assets/30996926-4e46-40fc-b57a-7082caeafaf1)
+![profilePage](https://github.com/user-attachments/assets/3724ca38-6e7b-4437-8096-69e6196ee0a7)
+
 **Sağlık Yanında**, yaşlı bireylerin ilaçlarını düzenli almalarını sağlarken, aile bireylerinin de bu süreci uzaktan takip edebilmesine olanak tanıyan, çapraz platform destekli ve bulut entegrasyonlu akıllı bir mobil sağlık asistanıdır. 
 
 ## ✨ Temel Özellikler (Features)
@@ -55,8 +61,12 @@ Projeyi kendi bilgisayarınızda derlemek ve çalıştırmak için aşağıdaki 
     ```
 
 2.  **Bağımlılıkları Yükleyin:**
-    ```bash
-    flutter pub get
+    ```bash![profilePage](https://github.com/user-attachments/assets/e63854cc-f0ba-44fa-ae26-fd50171c499f)
+
+
+
+    flutter pub get![Uploading profilePage.jpeg…]()
+
     ```
 
 3.  **Firebase Yapılandırması:**
