@@ -20,7 +20,7 @@
 
 | Giriş ve Kayıt | Ana Sayfa (İlaç Takibi) | Takvim Görünümü |
 | :---: | :---: | :---: |
-| <img src="https://github.com/user-attachments/assets/f8b91caf-e8e6-4ca8-8d25-87cdff393650" width="130"/> | <img src="![homePage](https://github.com/user-attachments/assets/7beefdac-d7db-4976-aa12-ae705caf63ae)" width="130"/> | <img src= "![callendarPage](https://github.com/user-attachments/assets/4f0d1917-e80a-49da-99fe-5516d5482274)" width="130"/> |
+| <img src="https://github.com/user-attachments/assets/f8b91caf-e8e6-4ca8-8d25-87cdff393650" width="130"/> | <img src="https://github.com/user-attachments/assets/7beefdac-d7db-4976-aa12-ae705caf63ae" width="130"/> | <img src= "https://github.com/user-attachments/assets/4f0d1917-e80a-49da-99fe-5516d5482274" width="130"/> |
 
 
 
