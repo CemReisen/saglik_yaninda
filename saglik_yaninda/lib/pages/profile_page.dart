@@ -13,6 +13,56 @@ class ProfilePage extends StatelessWidget {
     }, SetOptions(merge: true));
   }
 
+  // 🔥 İSİM DÜZENLEME DİYALOGU
+  void _showEditNameDialog(
+    BuildContext context,
+    String uid,
+    String currentName,
+  ) {
+    TextEditingController nameCtrl = TextEditingController(text: currentName);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          "İsminizi Düzenleyin",
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: TextField(
+          controller: nameCtrl,
+          decoration: const InputDecoration(
+            hintText: "Ad Soyad",
+            focusedBorder: UnderlineInputBorder(
+              borderSide: BorderSide(color: Color(0xFF4DB6AC)),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("İptal", style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF4DB6AC),
+            ),
+            onPressed: () async {
+              if (nameCtrl.text.trim().isNotEmpty) {
+                await FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(uid)
+                    .update({'name': nameCtrl.text.trim()});
+                if (context.mounted) Navigator.pop(context);
+              }
+            },
+            child: const Text("Kaydet", style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showBloodTypePicker(BuildContext context, String uid) {
     final List<String> bloodTypes = [
       "A Rh+",
@@ -24,7 +74,6 @@ class ProfilePage extends StatelessWidget {
       "0 Rh+",
       "0 Rh-",
     ];
-
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
@@ -79,16 +128,12 @@ class ProfilePage extends StatelessWidget {
   ) {
     int selectedHeight = 170;
     int selectedWeight = 70;
-
     if (currentVal.contains("/")) {
       try {
         List<String> parts = currentVal.split("/");
         selectedHeight = int.parse(parts[0].replaceAll(RegExp(r'[^0-9]'), ''));
         selectedWeight = int.parse(parts[1].replaceAll(RegExp(r'[^0-9]'), ''));
-      } catch (e) {
-        selectedHeight = 170;
-        selectedWeight = 70;
-      }
+      } catch (e) {}
     }
 
     showModalBottomSheet(
@@ -193,28 +238,19 @@ class ProfilePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
-    String firstName = "Kullanıcı";
-    String email = user?.email ?? "E-posta bulunamadı";
-
-    if (user != null) {
-      String rawName =
-          user.displayName ??
-          (user.email != null ? user.email!.split('@').first : "Kullanıcı");
-      List<String> nameParts = rawName.trim().split(' ');
-      if (nameParts.isNotEmpty && nameParts.first.isNotEmpty) {
-        firstName = nameParts.first;
-      }
-    }
+    if (user == null) return const Center(child: Text("Giriş Gerekli"));
 
     return StreamBuilder<DocumentSnapshot>(
       stream: FirebaseFirestore.instance
           .collection('users')
-          .doc(user?.uid)
+          .doc(user.uid)
           .snapshots(),
       builder: (context, userSnapshot) {
-        // Kullanıcı verisini güvenli şekilde alıyoruz
         var userData = userSnapshot.data?.data() as Map<String, dynamic>? ?? {};
 
+        // 🔥 FIREBASE AUTH DEĞİL, FIRESTORE 'NAME' ALANINA BAKIYORUZ
+        String displayName =
+            userData['name'] ?? user.email?.split('@').first ?? "Kullanıcı";
         String bloodType = userData['bloodType'] ?? "Belirlenmedi";
         String heightWeight = userData['heightWeight'] ?? "Belirlenmedi";
         bool notifications = userData['notifications'] ?? true;
@@ -225,16 +261,13 @@ class ProfilePage extends StatelessWidget {
         return StreamBuilder<QuerySnapshot>(
           stream: FirebaseFirestore.instance
               .collection('users')
-              .doc(user?.uid)
+              .doc(user.uid)
               .collection('medicines')
               .snapshots(),
           builder: (context, medSnapshot) {
             int uniqueMedicinesCount = 0;
-
             if (medSnapshot.hasData) {
               final docs = medSnapshot.data!.docs;
-
-              //İlaç çeşitliliğini (unique name) hesaplama kodu
               final uniqueNames = docs.map((doc) {
                 final data = doc.data() as Map<String, dynamic>;
                 return (data['name']?.toString().toLowerCase().trim() ?? "");
@@ -249,7 +282,13 @@ class ProfilePage extends StatelessWidget {
               child: Column(
                 children: [
                   const SizedBox(height: 10),
-                  _buildColorUserCard(firstName, email),
+                  // 🔥 DÜZELTİLMİŞ KART: İsmi ve UID'yi gönderiyoruz
+                  _buildColorUserCard(
+                    context,
+                    displayName,
+                    user.email ?? "",
+                    user.uid,
+                  ),
                   _buildConnectionCodeCard(connectionCode, context),
                   Row(
                     children: [
@@ -262,7 +301,7 @@ class ProfilePage extends StatelessWidget {
                       const SizedBox(width: 12),
                       _buildStatItem(
                         "Sağlık Puanım",
-                        "$totalScore", //Firestore'dan gelen gerçek anlık puan
+                        "$totalScore",
                         Icons.workspace_premium_rounded,
                         const Color(0xFFFFB300),
                       ),
@@ -275,7 +314,7 @@ class ProfilePage extends StatelessWidget {
                     items: [
                       _buildSelectRow(
                         context,
-                        user!.uid,
+                        user.uid,
                         "Kan Grubu",
                         bloodType,
                         "bloodType",
@@ -324,7 +363,12 @@ class ProfilePage extends StatelessWidget {
     );
   }
 
-  Widget _buildColorUserCard(String name, String email) {
+  Widget _buildColorUserCard(
+    BuildContext context,
+    String name,
+    String email,
+    String uid,
+  ) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24),
@@ -362,13 +406,28 @@ class ProfilePage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          Text(
-            name,
-            style: GoogleFonts.poppins(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
+          // 🔥 İSİM VE DÜZENLEME BUTONU
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const SizedBox(width: 32), // İkonu dengelemek için boşluk
+              Text(
+                name,
+                style: GoogleFonts.poppins(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+              IconButton(
+                icon: const Icon(
+                  Icons.edit_note,
+                  color: Colors.white70,
+                  size: 24,
+                ),
+                onPressed: () => _showEditNameDialog(context, uid, name),
+              ),
+            ],
           ),
           Text(
             email,
@@ -493,13 +552,9 @@ class ProfilePage extends StatelessWidget {
     return Column(
       children: [
         ListTile(
-          onTap: () {
-            if (field == "bloodType") {
-              _showBloodTypePicker(context, uid);
-            } else {
-              _showHeightWeightPicker(context, uid, value);
-            }
-          },
+          onTap: () => field == "bloodType"
+              ? _showBloodTypePicker(context, uid)
+              : _showHeightWeightPicker(context, uid, value),
           contentPadding: const EdgeInsets.symmetric(horizontal: 20),
           title: Text(
             label,
@@ -580,6 +635,13 @@ class ProfilePage extends StatelessWidget {
       height: 55,
       child: ElevatedButton.icon(
         onPressed: () async {
+          final currentUser = FirebaseAuth.instance.currentUser;
+          if (currentUser != null) {
+            await FirebaseFirestore.instance
+                .collection('users')
+                .doc(currentUser.uid)
+                .update({'fcmToken': ''});
+          }
           await FirebaseAuth.instance.signOut();
           if (context.mounted)
             Navigator.of(
@@ -612,7 +674,7 @@ class ProfilePage extends StatelessWidget {
       margin: const EdgeInsets.symmetric(vertical: 8),
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
-        color: const Color(0xFFE0F2F1), // Açık nane yeşili arkaplan
+        color: const Color(0xFFE0F2F1),
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
           color: const Color(0xFF4DB6AC).withOpacity(0.5),

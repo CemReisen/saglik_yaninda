@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:saglik_yaninda/main.dart';
+import 'package:saglik_yaninda/services/notification_service.dart';
 
 class AddMedicinePage extends StatefulWidget {
   const AddMedicinePage({super.key});
@@ -120,6 +121,7 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
   }
 
   // 🔥 GARANTİLİ KAYDETME (BATCH YÖNTEMİ)
+  // 🔥 GARANTİLİ KAYDETME (BATCH VE BİLDİRİM YÖNTEMİ)
   Future<void> _saveMedicine() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -174,7 +176,7 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
               .collection('medicines')
               .doc(); // ID'yi otomatik üret
 
-          // Veriyi pakete ekle (Henüz göndermiyoruz)
+          // Veriyi pakete ekle
           batch.set(docRef, {
             'name': _nameController.text.trim(),
             'dose': _doseController.text.trim(),
@@ -197,10 +199,34 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
                 : "",
             'createdAt': FieldValue.serverTimestamp(),
           });
+
+          // 🔥 İŞTE CAN ALICI NOKTA: TELEFONA ALARMI KURUYORUZ 🔥
+          DateTime now = DateTime.now();
+          DateTime scheduledDate = DateTime(
+            now.year,
+            now.month,
+            now.day,
+            time.hour,
+            time.minute,
+          );
+
+          // Eğer seçtiğimiz saat şu anki saatten önceyse (Geçmişe alarm kuramayız), alarmı yarına kur
+          if (scheduledDate.isBefore(now)) {
+            scheduledDate = scheduledDate.add(const Duration(days: 1));
+          }
+
+          // Bildirim servisini tetikle
+          await NotificationService.scheduleNotification(
+            id: notificationId,
+            title: "İlaç Vakti: ${_nameController.text.trim()}",
+            body: "${_doseController.text.trim()} - ${_hungerStatus}",
+            scheduledDate: scheduledDate,
+            notificationType: _notificationType, // Standart, Sessiz veya Alarm
+          );
         }
       }
 
-      // 🔥 HEPSİNİ TEK SEFERDE GÖNDER
+      // 🔥 HEPSİNİ TEK SEFERDE VERİTABANINA GÖNDER
       await batch.commit();
 
       if (mounted) {
@@ -211,15 +237,15 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
           const SnackBar(content: Text("İlaçlar başarıyla kaydedildi! ✅")),
         );
 
-        // 🔥 KESİN DÖNÜŞ (Tüm geçmişi silip Ana Sayfayı yeniden başlatır)
+        // KESİN DÖNÜŞ (Ana Sayfayı yeniden başlatır)
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (context) => const MainLayout()),
-          (route) => false, // Geri dönülecek sayfa bırakma
+          (route) => false,
         );
       }
     } catch (e) {
-      if (mounted) Navigator.pop(context); // Dialogu kapat
+      if (mounted) Navigator.pop(context);
       print("Hata Detayı: $e");
       ScaffoldMessenger.of(
         context,

@@ -3,6 +3,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+// 🔥 1. FCM İÇİN EKLENEN IMPORT
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -17,12 +19,30 @@ class _LoginPageState extends State<LoginPage> {
   final TextEditingController _passwordController = TextEditingController();
   bool _isLoading = false;
   bool _rememberMe = true;
+  bool _passwordVisible = false;
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  // 🔥 FCM TOKEN KAYDETME FONKSİYONU
+  Future<void> _saveDeviceToken(String userId) async {
+    try {
+      FirebaseMessaging messaging = FirebaseMessaging.instance;
+      String? token = await messaging.getToken();
+
+      if (token != null) {
+        await FirebaseFirestore.instance.collection('users').doc(userId).update(
+          {'fcmToken': token},
+        );
+        print("✅ FCM Token veritabanına kaydedildi: $token");
+      }
+    } catch (e) {
+      print("⚠️ FCM Token alınamadı: $e");
+    }
   }
 
   Future<void> _login() async {
@@ -47,6 +67,9 @@ class _LoginPageState extends State<LoginPage> {
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('beni_hatirla', _rememberMe);
+
+      // 🔥 2. GİRİŞ YAPILDIKTAN HEMEN SONRA TOKEN'I KAYDET
+      await _saveDeviceToken(userCredential.user!.uid);
 
       DocumentSnapshot userDoc = await FirebaseFirestore.instance
           .collection('users')
@@ -82,8 +105,6 @@ class _LoginPageState extends State<LoginPage> {
       }
     }
   }
-
-  bool _passwordVisible = false;
 
   @override
   Widget build(BuildContext context) {
