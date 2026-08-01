@@ -14,20 +14,38 @@ class RegisterPage extends StatefulWidget {
 
 class _RegisterPageState extends State<RegisterPage> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  // 🔥 İSİM KAYDETMEK İÇİN EKSİK OLAN CONTROLLER EKLENDİ
+  final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmPasswordController =
       TextEditingController();
 
+  bool _isLoading = false;
+  String _selectedRole = "elder";
+
   @override
   void dispose() {
+    _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
   }
 
-  String _selectedRole = "elder";
+  // 🔥 TÜRKÇE HATA ÇEVİRMENİ
+  String _getTurkishErrorMessage(String code) {
+    switch (code) {
+      case 'email-already-in-use':
+        return 'Bu e-posta adresi zaten kullanımda.';
+      case 'invalid-email':
+        return 'Lütfen geçerli bir e-posta adresi giriniz.';
+      case 'weak-password':
+        return 'Şifreniz çok zayıf. Lütfen en az 6 karakterli bir şifre belirleyin.';
+      default:
+        return 'Kayıt işlemi başarısız oldu. Lütfen tekrar deneyin.';
+    }
+  }
 
   String _generateConnectionCode() {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -36,26 +54,38 @@ class _RegisterPageState extends State<RegisterPage> {
       Iterable.generate(6, (_) => chars.codeUnitAt(rnd.nextInt(chars.length))),
     );
     return "${code.substring(0, 3)}-${code.substring(3, 6)}";
-  } // Varsayılan olarak "elder" seçili
+  }
 
   Future<void> _register() async {
+    final name = _nameController.text.trim();
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
     final confirmPassword = _confirmPasswordController.text.trim();
 
-    if (email.isEmpty || password.isEmpty || confirmPassword.isEmpty) {
+    if (name.isEmpty ||
+        email.isEmpty ||
+        password.isEmpty ||
+        confirmPassword.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Lütfen tüm alanları doldurun.")),
+        const SnackBar(
+          content: Text("Lütfen tüm alanları doldurun."),
+          backgroundColor: Colors.orange,
+        ),
       );
       return;
     }
 
     if (password != confirmPassword) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("Şifreler eşleşmiyor.")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Girdiğiniz şifreler birbiriyle eşleşmiyor."),
+          backgroundColor: Colors.orange,
+        ),
+      );
       return;
     }
+
+    setState(() => _isLoading = true);
 
     try {
       UserCredential userCredential = await _auth
@@ -63,11 +93,11 @@ class _RegisterPageState extends State<RegisterPage> {
 
       String? token = await FirebaseMessaging.instance.getToken();
       String uid = userCredential.user!.uid;
-
       String connectionCode = _generateConnectionCode();
 
       await FirebaseFirestore.instance.collection("users").doc(uid).set({
         "uid": uid,
+        "name": name, // 🔥 ARTIK İSİM DE VERİTABANINA GİDİYOR
         "email": email,
         "role": _selectedRole,
         "connectionCode": connectionCode,
@@ -75,15 +105,24 @@ class _RegisterPageState extends State<RegisterPage> {
         "createdAt": FieldValue.serverTimestamp(),
       });
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("Kayıt başarılı!")));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Kayıt işlemi başarıyla tamamlandı! ✅"),
+          backgroundColor: Color(0xFF4DB6AC),
+        ),
+      );
 
       Navigator.pushReplacementNamed(context, '/login');
     } on FirebaseAuthException catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("Hata: ${e.message}")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_getTurkishErrorMessage(e.code)),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -100,84 +139,112 @@ class _RegisterPageState extends State<RegisterPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: mainGreen.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.person_add_alt_1_rounded,
+                    size: 60,
+                    color: mainGreen,
+                  ),
+                ),
+                const SizedBox(height: 16),
                 Text(
-                  "Kayıt Ol",
+                  "Yeni Hesap Oluştur",
                   style: GoogleFonts.poppins(
-                    fontSize: 32,
-                    fontWeight: FontWeight.w600,
+                    fontSize: 26,
+                    fontWeight: FontWeight.w700,
                     color: mainGreen,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  "Yeni hesabını oluştur ve sağlığını takip et",
+                  "Sağlık takibine hemen başla",
                   style: GoogleFonts.poppins(
                     fontSize: 14,
-                    color: Colors.black.withOpacity(0.7),
+                    color: Colors.grey[600],
                   ),
                 ),
-                const SizedBox(height: 40),
+                const SizedBox(height: 30),
 
-                _buildCard("Ad Soyad"),
-
-                _buildCard("E-posta", controller: _emailController),
-
+                // 🔥 CONTROLLER EKLENDİ
                 _buildCard(
-                  "Şifre",
+                  "Ad Soyad",
+                  Icons.person_outline,
+                  controller: _nameController,
+                ),
+                _buildCard(
+                  "E-posta Adresi",
+                  Icons.email_outlined,
+                  controller: _emailController,
+                ),
+                _buildCard(
+                  "Şifre Belirleyin",
+                  Icons.lock_outline,
                   controller: _passwordController,
                   obscure: true,
                 ),
-
                 _buildCard(
-                  "Şifre Tekrar",
+                  "Şifreyi Tekrar Girin",
+                  Icons.lock_reset,
                   controller: _confirmPasswordController,
                   obscure: true,
                 ),
 
                 const SizedBox(height: 10),
-
                 _buildRoleSelector(),
 
                 SizedBox(
                   width: double.infinity,
-                  height: 50,
+                  height: 55,
                   child: ElevatedButton(
-                    onPressed: _register,
+                    onPressed: _isLoading ? null : _register,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: mainGreen,
+                      elevation: 2,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(16),
                       ),
                     ),
-                    child: Text(
-                      "Kayıt Ol",
-                      style: GoogleFonts.poppins(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
-                    ),
+                    child: _isLoading
+                        ? const SizedBox(
+                            height: 24,
+                            width: 24,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2.5,
+                            ),
+                          )
+                        : Text(
+                            "KAYIT OL",
+                            style: GoogleFonts.poppins(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1,
+                              color: Colors.white,
+                            ),
+                          ),
                   ),
                 ),
 
                 const SizedBox(height: 20),
-
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
-                      "Hesabınız var mı? ",
+                      "Zaten hesabınız var mı? ",
                       style: GoogleFonts.poppins(color: Colors.grey[600]),
                     ),
                     GestureDetector(
-                      onTap: () {
-                        Navigator.pushNamed(context, '/login');
-                      },
+                      onTap: () => Navigator.pushNamed(context, '/login'),
                       child: Text(
-                        "Giriş yapın",
+                        "Giriş Yapın",
                         style: GoogleFonts.poppins(
                           color: mainGreen,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),
@@ -192,39 +259,39 @@ class _RegisterPageState extends State<RegisterPage> {
   }
 
   Widget _buildCard(
-    String label, {
+    String label,
+    IconData icon, {
     TextEditingController? controller,
     bool obscure = false,
   }) {
-    const Color lightGray = Color(0xFFF5F5F5);
-
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: lightGray,
+        color: const Color(0xFFF5F5F5),
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        border: Border.all(color: Colors.grey.shade200),
       ),
       child: TextField(
         controller: controller,
         obscureText: obscure,
+        style: GoogleFonts.poppins(fontSize: 15),
         decoration: InputDecoration(
           labelText: label,
-          labelStyle: GoogleFonts.poppins(color: Colors.grey[700]),
+          labelStyle: GoogleFonts.poppins(
+            color: Colors.grey[500],
+            fontSize: 14,
+          ),
+          prefixIcon: Icon(icon, color: const Color(0xFF4DB6AC), size: 22),
           border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 16,
+          ),
         ),
       ),
     );
   }
 
-  //Rol Seçici Widget
   Widget _buildRoleSelector() {
     const Color mainGreen = Color(0xFF4DB6AC);
     return Container(

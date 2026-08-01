@@ -20,12 +20,27 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
     super.dispose();
   }
 
+  // 🔥 TÜRKÇE HATA ÇEVİRMENİ
+  String _getTurkishErrorMessage(String code) {
+    switch (code) {
+      case 'user-not-found':
+        return 'Bu e-posta adresine ait bir hesap bulunamadı.';
+      case 'invalid-email':
+        return 'Lütfen geçerli bir e-posta adresi giriniz.';
+      default:
+        return 'Sıfırlama bağlantısı gönderilemedi. Lütfen tekrar deneyin.';
+    }
+  }
+
   Future<void> _resetPassword() async {
     final email = _emailController.text.trim();
 
     if (email.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Lütfen e-posta adresinizi girin.")),
+        const SnackBar(
+          content: Text("Lütfen kayıtlı e-posta adresinizi girin."),
+          backgroundColor: Colors.orange,
+        ),
       );
       return;
     }
@@ -34,17 +49,25 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
 
     try {
       await _auth.sendPasswordResetEmail(email: email);
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Şifre sıfırlama bağlantısı gönderildi!")),
+        const SnackBar(
+          content: Text("Şifre sıfırlama bağlantısı başarıyla gönderildi! ✅"),
+          backgroundColor: Color(0xFF4DB6AC),
+        ),
       );
 
       Navigator.pushReplacementNamed(context, '/login');
     } on FirebaseAuthException catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("Hata: ${e.message}")));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_getTurkishErrorMessage(e.code)),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
     } finally {
-      setState(() => _isSending = false);
+      if (mounted) setState(() => _isSending = false);
     }
   }
 
@@ -55,95 +78,114 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
 
     return Scaffold(
       backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: mainGreen),
+          onPressed: () => Navigator.pushReplacementNamed(context, '/login'),
+        ),
+      ),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Text(
-                  "Şifremi Unuttum",
-                  style: GoogleFonts.poppins(
-                    fontSize: 32,
-                    fontWeight: FontWeight.w600,
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: mainGreen.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.lock_reset_rounded,
+                    size: 70,
                     color: mainGreen,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 24),
                 Text(
-                  "E-posta adresinizi girin, size sıfırlama bağlantısı gönderelim",
+                  "Şifremi Unuttum",
+                  style: GoogleFonts.poppins(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w700,
+                    color: mainGreen,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  "E-posta adresinizi girin, size hemen güvenli bir sıfırlama bağlantısı gönderelim.",
                   textAlign: TextAlign.center,
                   style: GoogleFonts.poppins(
                     fontSize: 14,
-                    color: Colors.black.withOpacity(0.7),
+                    color: Colors.grey[600],
+                    height: 1.5,
                   ),
                 ),
                 const SizedBox(height: 40),
 
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 4,
-                  ),
-                  margin: const EdgeInsets.only(bottom: 30),
+                  margin: const EdgeInsets.only(bottom: 24),
                   decoration: BoxDecoration(
                     color: lightGray,
                     borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        blurRadius: 6,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
+                    border: Border.all(color: Colors.grey.shade200),
                   ),
                   child: TextField(
                     controller: _emailController,
+                    style: GoogleFonts.poppins(fontSize: 15),
                     decoration: InputDecoration(
-                      labelText: "E-posta",
-                      labelStyle: GoogleFonts.poppins(color: Colors.grey[700]),
+                      labelText: "Kayıtlı E-posta Adresiniz",
+                      labelStyle: GoogleFonts.poppins(
+                        color: Colors.grey[500],
+                        fontSize: 14,
+                      ),
+                      prefixIcon: const Icon(
+                        Icons.mark_email_read_outlined,
+                        color: mainGreen,
+                        size: 22,
+                      ),
                       border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 16,
+                      ),
                     ),
                   ),
                 ),
 
                 SizedBox(
                   width: double.infinity,
-                  height: 50,
+                  height: 55,
                   child: ElevatedButton(
                     onPressed: _isSending ? null : _resetPassword,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: mainGreen,
+                      elevation: 2,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(16),
                       ),
                     ),
                     child: _isSending
-                        ? const CircularProgressIndicator(color: Colors.white)
+                        ? const SizedBox(
+                            height: 24,
+                            width: 24,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2.5,
+                            ),
+                          )
                         : Text(
-                            "Bağlantıyı Gönder",
+                            "BAĞLANTIYI GÖNDER",
                             style: GoogleFonts.poppins(
                               fontSize: 16,
-                              fontWeight: FontWeight.w600,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1,
                               color: Colors.white,
                             ),
                           ),
-                  ),
-                ),
-
-                const SizedBox(height: 20),
-
-                GestureDetector(
-                  onTap: () {
-                    Navigator.pushReplacementNamed(context, '/login');
-                  },
-                  child: Text(
-                    "Giriş sayfasına dön",
-                    style: GoogleFonts.poppins(
-                      color: mainGreen,
-                      fontWeight: FontWeight.w600,
-                    ),
                   ),
                 ),
               ],

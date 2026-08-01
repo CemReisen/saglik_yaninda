@@ -8,7 +8,6 @@ import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-
 import 'package:saglik_yaninda/pages/home_page.dart';
 import 'package:saglik_yaninda/pages/calendar_page.dart';
 import 'package:saglik_yaninda/pages/add_medicine_page.dart';
@@ -21,7 +20,6 @@ import 'package:saglik_yaninda/services/notification_service.dart';
 import 'package:saglik_yaninda/pages/caregiver/caregiver_home_page.dart';
 import 'core/theme/app_theme.dart';
 
-// 🔥 FCM ARKA PLAN DİNLEYİCİSİ
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
@@ -38,12 +36,10 @@ void main() async {
   FirebaseMessaging.onMessage.listen((RemoteMessage message) {
     if (message.notification != null) {
       print('Ön planda bildirim alındı: ${message.notification!.title}');
-      NotificationService.scheduleNotification(
+      NotificationService.showInstantNotification(
         id: DateTime.now().millisecond,
         title: message.notification!.title ?? "Sağlık Yanında",
         body: message.notification!.body ?? "Yeni bir bildiriminiz var.",
-        scheduledDate: DateTime.now().add(const Duration(seconds: 1)),
-        notificationType: "Standart",
       );
     }
   });
@@ -54,7 +50,6 @@ void main() async {
     await FirebaseAuth.instance.signOut();
   }
 
-  // Ekranı dikey kullanıma kilitleyelim ki UI bozulmasın
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]).then((
     _,
   ) {
@@ -140,7 +135,6 @@ class _MainLayoutState extends State<MainLayout> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFECEFF1),
-      // 🔥 TÜM EKRAN TEK BİR SAFEAREA İÇİNDE (Çakışmayı bitiren nokta)
       body: SafeArea(
         child: Column(
           children: [
@@ -174,7 +168,7 @@ class _MainLayoutState extends State<MainLayout> {
             // 2. SAYFA İÇERİKLERİ BÖLÜMÜ
             Expanded(child: _pages[_currentIndex]),
 
-            // 3. ALT MENÜ BÖLÜMÜ (Artık Scaffold bottomNavigationBar değil, Column'un bir parçası!)
+            // 3. ALT MENÜ BÖLÜMÜ
             Container(
               margin: const EdgeInsets.only(
                 bottom: 12,

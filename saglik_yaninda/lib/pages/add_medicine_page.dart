@@ -16,10 +16,65 @@ class AddMedicinePage extends StatefulWidget {
 class _AddMedicinePageState extends State<AddMedicinePage> {
   final _formKey = GlobalKey<FormState>();
 
-  // Controllerlar
+  // Controllerlar ve Focus Node
   final TextEditingController _nameController = TextEditingController();
+  final FocusNode _nameFocusNode = FocusNode();
   final TextEditingController _doseController = TextEditingController();
   final TextEditingController _descController = TextEditingController();
+
+  // Akıllı Ecza Deposu Veritabanı
+  final List<String> _medicineDatabase = [
+    "Parol 500mg Tablet",
+    "Aspirin 100mg",
+    "Majezik 100mg",
+    "Arveles 25mg",
+    "Dolorex 50mg",
+    "Calpol 120mg Şurup",
+    "Novalgine 500mg",
+    "Lansor 30mg",
+    "Gaviscon Şurup",
+    "Efermag 365mg",
+    "Ventolin İnhaler",
+    "Tylolhot",
+    "Deralin 40mg",
+    "Coraspin 100mg",
+    "Glifor 1000mg",
+    "Euthyrox 50mcg",
+    "Cipro 500mg",
+    "Augmentin 1000mg",
+    "Macrol 500mg",
+    "Parol Plus",
+    "Voltaren Krem",
+    "Fucidin Krem",
+    "Zyrtec 10mg",
+    "Claritin 10mg",
+    "Katarin Fort",
+    "Theraflu Forte",
+    "A-ferin",
+    "Ibuprofen 400mg",
+    "Panadol",
+    "Minoset",
+    "Nexium 40mg",
+    "Bemiks Kompoze",
+    "Devit-3 Damla",
+    "Apireks Şurup",
+    "Nurofen 200mg",
+    "Avelox 400mg",
+    "Klamoks 1000mg",
+  ];
+
+  // Hızlı Doz Seçenekleri
+  final List<String> _quickDoses = [
+    "1 Tablet",
+    "Yarım Tablet",
+    "2 Tablet",
+    "1 Ölçek",
+    "Yarım Ölçek",
+    "1 Damla",
+    "1 Puf",
+    "1 Şase",
+    "1 Ampul",
+  ];
 
   // Değişkenler
   String _hungerStatus = "Tok Karnına";
@@ -66,6 +121,7 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
   @override
   void dispose() {
     _nameController.dispose();
+    _nameFocusNode.dispose();
     _doseController.dispose();
     _descController.dispose();
     super.dispose();
@@ -120,28 +176,51 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
     }
   }
 
-  // 🔥 GARANTİLİ KAYDETME (BATCH YÖNTEMİ)
-  // 🔥 GARANTİLİ KAYDETME (BATCH VE BİLDİRİM YÖNTEMİ)
   Future<void> _saveMedicine() async {
+    // 🔥 GÜVENLİK 1: Form içindeki zorunlu alanlar (Ad ve Doz) dolu mu?
     if (!_formKey.currentState!.validate()) return;
 
-    // Seçim Kontrolleri
+    // 🔥 GÜVENLİK 2: Tarih Aralığı seçilmiş mi? (EN KRİTİK KONTROL)
+    if (_dateRange == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            "⚠️ Lütfen ilacın kullanılacağı Tarih Aralığını seçiniz!",
+          ),
+          backgroundColor: Colors.orange,
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
+    // 🔥 GÜVENLİK 3: En az 1 tane saat seçilmiş mi?
     bool anyTimeSelected = _doseTimes.any(
       (element) => element['isActive'] == true,
     );
     if (!anyTimeSelected) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Lütfen en az bir saat seçiniz.")),
+        const SnackBar(
+          content: Text("⚠️ Lütfen ilacın içileceği en az bir Saat seçiniz!"),
+          backgroundColor: Colors.orange,
+        ),
       );
       return;
     }
 
     List<String> activeDayNames = [];
-    if (_repeatType == "Belirli Günler") {
+
+    if (_repeatType == "Her Gün") {
+      activeDayNames = List.from(_weekDays);
+    } else if (_repeatType == "Belirli Günler") {
+      // 🔥 GÜVENLİK 4: Belirli günler seçildiyse en az 1 gün işaretlenmiş mi?
       bool anyDaySelected = _selectedDays.contains(true);
       if (!anyDaySelected) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Lütfen en az bir gün seçiniz.")),
+          const SnackBar(
+            content: Text("⚠️ Lütfen ilacın kullanılacağı Günleri seçiniz!"),
+            backgroundColor: Colors.orange,
+          ),
         );
         return;
       }
@@ -153,15 +232,15 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
     final User? user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    // Yükleniyor göstergesi
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => const Center(child: CircularProgressIndicator()),
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(color: Color(0xFF4DB6AC)),
+      ),
     );
 
     try {
-      // 🔥 BATCH BAŞLATIYORUZ (Paket İşlemi)
       WriteBatch batch = FirebaseFirestore.instance.batch();
 
       for (var dose in _doseTimes) {
@@ -169,14 +248,12 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
           TimeOfDay time = dose['time'];
           int notificationId = Random().nextInt(1000000);
 
-          // Yeni bir doküman referansı oluştur
           DocumentReference docRef = FirebaseFirestore.instance
               .collection('users')
               .doc(user.uid)
               .collection('medicines')
-              .doc(); // ID'yi otomatik üret
+              .doc();
 
-          // Veriyi pakete ekle
           batch.set(docRef, {
             'name': _nameController.text.trim(),
             'dose': _doseController.text.trim(),
@@ -191,16 +268,13 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
             'hungerStatus': _hungerStatus,
             'isCritical': _isCritical,
             'notificationType': _notificationType,
-            'startDate': _dateRange != null
-                ? "${_dateRange!.start.day}.${_dateRange!.start.month}.${_dateRange!.start.year}"
-                : "",
-            'endDate': _dateRange != null
-                ? "${_dateRange!.end.day}.${_dateRange!.end.month}.${_dateRange!.end.year}"
-                : "",
+            'startDate':
+                "${_dateRange!.start.day}.${_dateRange!.start.month}.${_dateRange!.start.year}",
+            'endDate':
+                "${_dateRange!.end.day}.${_dateRange!.end.month}.${_dateRange!.end.year}",
             'createdAt': FieldValue.serverTimestamp(),
           });
 
-          // 🔥 İŞTE CAN ALICI NOKTA: TELEFONA ALARMI KURUYORUZ 🔥
           DateTime now = DateTime.now();
           DateTime scheduledDate = DateTime(
             now.year,
@@ -210,34 +284,30 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
             time.minute,
           );
 
-          // Eğer seçtiğimiz saat şu anki saatten önceyse (Geçmişe alarm kuramayız), alarmı yarına kur
           if (scheduledDate.isBefore(now)) {
             scheduledDate = scheduledDate.add(const Duration(days: 1));
           }
 
-          // Bildirim servisini tetikle
           await NotificationService.scheduleNotification(
             id: notificationId,
             title: "İlaç Vakti: ${_nameController.text.trim()}",
             body: "${_doseController.text.trim()} - ${_hungerStatus}",
             scheduledDate: scheduledDate,
-            notificationType: _notificationType, // Standart, Sessiz veya Alarm
+            notificationType: _notificationType,
           );
         }
       }
 
-      // 🔥 HEPSİNİ TEK SEFERDE VERİTABANINA GÖNDER
       await batch.commit();
 
       if (mounted) {
-        // Yükleniyor dialogunu kapat
         Navigator.pop(context);
-
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("İlaçlar başarıyla kaydedildi! ✅")),
+          const SnackBar(
+            content: Text("İlaçlar başarıyla kaydedildi! ✅"),
+            backgroundColor: Color(0xFF4DB6AC),
+          ),
         );
-
-        // KESİN DÖNÜŞ (Ana Sayfayı yeniden başlatır)
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (context) => const MainLayout()),
@@ -253,57 +323,162 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
     }
   }
 
+  Widget _buildMedicineAutocomplete() {
+    return RawAutocomplete<String>(
+      textEditingController: _nameController,
+      focusNode: _nameFocusNode,
+      optionsBuilder: (TextEditingValue textEditingValue) {
+        if (textEditingValue.text.isEmpty) {
+          return const Iterable<String>.empty();
+        }
+        return _medicineDatabase.where((String option) {
+          return option.toLowerCase().contains(
+            textEditingValue.text.toLowerCase(),
+          );
+        });
+      },
+      fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+        return _buildTextField(
+          controller: controller,
+          focusNode: focusNode,
+          label: "İlaç Adı (Ara veya Yaz)",
+          icon: Icons.search,
+          isRequired: true, // Zorunlu alan
+        );
+      },
+      optionsViewBuilder: (context, onSelected, options) {
+        return Align(
+          alignment: Alignment.topLeft,
+          child: Material(
+            elevation: 8,
+            borderRadius: BorderRadius.circular(16),
+            color: Colors.white,
+            child: Container(
+              width: MediaQuery.of(context).size.width - 40,
+              constraints: const BoxConstraints(maxHeight: 220),
+              child: ListView.separated(
+                padding: EdgeInsets.zero,
+                shrinkWrap: true,
+                itemCount: options.length,
+                separatorBuilder: (context, index) =>
+                    const Divider(height: 1, indent: 16, endIndent: 16),
+                itemBuilder: (BuildContext context, int index) {
+                  final String option = options.elementAt(index);
+                  return ListTile(
+                    leading: const Icon(
+                      Icons.medication_liquid,
+                      color: Color(0xFF4DB6AC),
+                    ),
+                    title: Text(
+                      option,
+                      style: GoogleFonts.poppins(
+                        fontWeight: FontWeight.w500,
+                        fontSize: 14,
+                      ),
+                    ),
+                    onTap: () => onSelected(option),
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildDoseChips() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 10.0, bottom: 8.0),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 10,
+        children: _quickDoses.map((dose) {
+          return InkWell(
+            onTap: () {
+              setState(() {
+                _doseController.text = dose;
+              });
+            },
+            borderRadius: BorderRadius.circular(20),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: const Color(0xFF4DB6AC).withOpacity(0.5),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.03),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Text(
+                dose,
+                style: GoogleFonts.poppins(
+                  color: const Color(0xFF00695C),
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFECEFF1),
-
-      // 🔥 KOMPAKT BAŞLIK (Takvim Sayfasıyla Aynı)
       appBar: AppBar(
-        toolbarHeight: 40, // Yüksekliği kıstık (Standart 56 idi)
+        toolbarHeight: 40,
         title: Text(
           "Yeni İlaç Ekle",
           style: GoogleFonts.poppins(
             color: const Color(0xFF263238),
             fontWeight: FontWeight.bold,
-            fontSize: 18, // Fontu 1 tık küçülttük ki sığsın
+            fontSize: 18,
           ),
         ),
         backgroundColor: Colors.transparent,
         elevation: 0,
         centerTitle: true,
-        automaticallyImplyLeading: false, // Geri butonu yok
+        automaticallyImplyLeading: false,
       ),
-
       body: SingleChildScrollView(
-        // Üstten boşluğu da biraz kıstık (20 yerine 10 yaptık)
         padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
         child: Form(
           key: _formKey,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ... Geri kalan kodların aynı devam edecek ...
               _buildSectionTitle("İlaç Bilgileri"),
-              // ...
               const SizedBox(height: 12),
-              _buildTextField(
-                controller: _nameController,
-                label: "İlaç Adı",
-                icon: Icons.medication,
-              ),
+
+              _buildMedicineAutocomplete(),
               const SizedBox(height: 15),
+
               _buildTextField(
                 controller: _doseController,
-                label: "Doz",
+                label: "Doz (Örn: 1 Tablet)",
                 icon: Icons.local_pharmacy,
+                isRequired: true, // Zorunlu alan
               ),
+              _buildDoseChips(),
+
               const SizedBox(height: 15),
               _buildTextField(
                 controller: _descController,
-                label: "Notlar",
+                label: "Notlar (İsteğe Bağlı)",
                 icon: Icons.notes,
                 maxLines: 2,
+                isRequired: false, // 🔥 ARTIK ZORUNLU DEĞİL
               ),
 
               const SizedBox(height: 25),
@@ -315,7 +490,7 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
+                  boxShadow: const [
                     BoxShadow(
                       color: Colors.black12,
                       blurRadius: 4,
@@ -454,7 +629,7 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
+                  boxShadow: const [
                     BoxShadow(
                       color: Colors.black12,
                       blurRadius: 4,
@@ -527,6 +702,8 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
               const SizedBox(height: 25),
               _buildSectionTitle("Tarih Aralığı"),
               const SizedBox(height: 12),
+
+              // 🔥 GÜNCEL: Seçim Yapılmamışsa Uyarı Rengi Ver
               GestureDetector(
                 onTap: _pickDateRange,
                 child: Container(
@@ -534,19 +711,29 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.grey.shade300),
+                    border: Border.all(
+                      color: _dateRange == null
+                          ? Colors.orange.shade300
+                          : Colors.grey.shade300,
+                      width: _dateRange == null ? 1.5 : 1.0,
+                    ),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.date_range, color: Color(0xFF4DB6AC)),
+                      Icon(
+                        Icons.date_range,
+                        color: _dateRange == null
+                            ? Colors.orange
+                            : const Color(0xFF4DB6AC),
+                      ),
                       const SizedBox(width: 10),
                       Text(
                         _dateRange == null
-                            ? "Tarih Aralığı Seçiniz"
+                            ? "Tarih Aralığı Seçiniz (Zorunlu)"
                             : "${_dateRange!.start.day}.${_dateRange!.start.month} - ${_dateRange!.end.day}.${_dateRange!.end.month}",
                         style: TextStyle(
                           color: _dateRange == null
-                              ? Colors.grey
+                              ? Colors.orange.shade700
                               : Colors.black87,
                           fontWeight: FontWeight.w500,
                         ),
@@ -592,7 +779,6 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
     );
   }
 
-  // Yardımcı Widgetlar (Aynı)
   Widget _buildDropdown({
     required String currentValue,
     required List<String> items,
@@ -714,11 +900,14 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
     );
   }
 
+  // 🔥 GÜNCEL: Dinamik Zorunluluk Kontrolü (isRequired) Eklendi
   Widget _buildTextField({
     required TextEditingController controller,
     required String label,
     required IconData icon,
     int maxLines = 1,
+    FocusNode? focusNode,
+    bool isRequired = true, // Varsayılan olarak zorunlu
   }) {
     return Container(
       decoration: BoxDecoration(
@@ -734,8 +923,14 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
       ),
       child: TextFormField(
         controller: controller,
+        focusNode: focusNode,
         maxLines: maxLines,
-        validator: (value) => value!.isEmpty ? "Bu alan zorunludur" : null,
+        // Zorunluysa boş mu diye kontrol et, değilse geç
+        validator: isRequired
+            ? (value) => (value == null || value.trim().isEmpty)
+                  ? "Bu alan zorunludur"
+                  : null
+            : null,
         decoration: InputDecoration(
           labelText: label,
           prefixIcon: Icon(icon, color: const Color(0xFF4DB6AC)),

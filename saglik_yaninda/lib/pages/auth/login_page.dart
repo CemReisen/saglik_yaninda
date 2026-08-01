@@ -3,7 +3,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-// 🔥 1. FCM İÇİN EKLENEN IMPORT
 import 'package:firebase_messaging/firebase_messaging.dart';
 
 class LoginPage extends StatefulWidget {
@@ -28,7 +27,25 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
-  // 🔥 FCM TOKEN KAYDETME FONKSİYONU
+  // 🔥 TÜRKÇE HATA ÇEVİRMENİ
+  String _getTurkishErrorMessage(String code) {
+    switch (code) {
+      case 'user-not-found':
+        return 'Bu e-posta adresine ait bir hesap bulunamadı.';
+      case 'wrong-password':
+      case 'invalid-credential':
+        return 'E-posta adresiniz veya şifreniz hatalı.';
+      case 'invalid-email':
+        return 'Lütfen geçerli bir e-posta adresi giriniz.';
+      case 'user-disabled':
+        return 'Bu hesap yöneticiler tarafından engellenmiş.';
+      case 'too-many-requests':
+        return 'Üst üste çok fazla hatalı giriş yaptınız. Lütfen biraz bekleyip tekrar deneyin.';
+      default:
+        return 'Giriş yapılamadı. Lütfen bilgilerinizi kontrol edin.';
+    }
+  }
+
   Future<void> _saveDeviceToken(String userId) async {
     try {
       FirebaseMessaging messaging = FirebaseMessaging.instance;
@@ -38,7 +55,7 @@ class _LoginPageState extends State<LoginPage> {
         await FirebaseFirestore.instance.collection('users').doc(userId).update(
           {'fcmToken': token},
         );
-        print("✅ FCM Token veritabanına kaydedildi: $token");
+        print("✅ FCM Token veritabanına kaydedildi.");
       }
     } catch (e) {
       print("⚠️ FCM Token alınamadı: $e");
@@ -52,7 +69,10 @@ class _LoginPageState extends State<LoginPage> {
     if (email.isEmpty || password.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Lütfen e-posta ve şifre girin.")),
+        const SnackBar(
+          content: Text("Lütfen e-posta ve şifrenizi girin."),
+          backgroundColor: Colors.orange,
+        ),
       );
       return;
     }
@@ -68,7 +88,6 @@ class _LoginPageState extends State<LoginPage> {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('beni_hatirla', _rememberMe);
 
-      // 🔥 2. GİRİŞ YAPILDIKTAN HEMEN SONRA TOKEN'I KAYDET
       await _saveDeviceToken(userCredential.user!.uid);
 
       DocumentSnapshot userDoc = await FirebaseFirestore.instance
@@ -76,16 +95,11 @@ class _LoginPageState extends State<LoginPage> {
           .doc(userCredential.user!.uid)
           .get();
 
-      String role = "elder"; //Varsayılan rol
+      String role = "elder";
       if (userDoc.exists) {
         var data = userDoc.data() as Map<String, dynamic>;
         role = data['role'] ?? "elder";
       }
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("Giriş başarılı!")));
 
       if (!mounted) return;
 
@@ -96,9 +110,13 @@ class _LoginPageState extends State<LoginPage> {
       }
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("Hata: ${e.message}")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_getTurkishErrorMessage(e.code)),
+          backgroundColor: Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -120,32 +138,48 @@ class _LoginPageState extends State<LoginPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
+                // 🔥 YENİ EKLENEN TEMA İKONU
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: mainGreen.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.health_and_safety_rounded,
+                    size: 70,
+                    color: mainGreen,
+                  ),
+                ),
+                const SizedBox(height: 20),
                 Text(
                   "Sağlık Yanında",
                   style: GoogleFonts.poppins(
-                    fontSize: 32,
-                    fontWeight: FontWeight.w600,
+                    fontSize: 28,
+                    fontWeight: FontWeight.w700,
                     color: mainGreen,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  "Sağlığınızı takip edin",
+                  "Sağlığınızı güvenle takip edin",
                   style: GoogleFonts.poppins(
                     fontSize: 14,
-                    color: Colors.black.withOpacity(0.7),
+                    color: Colors.grey[600],
                   ),
                 ),
                 const SizedBox(height: 40),
 
                 _buildCard(
                   label: "E-posta",
+                  icon: Icons.email_outlined,
                   controller: _emailController,
                   lightGray: lightGray,
                 ),
 
                 _buildCard(
                   label: "Şifre",
+                  icon: Icons.lock_outline_rounded,
                   controller: _passwordController,
                   lightGray: lightGray,
                   isPassword: true,
@@ -163,7 +197,7 @@ class _LoginPageState extends State<LoginPage> {
                           width: 24,
                           child: Checkbox(
                             value: _rememberMe,
-                            activeColor: const Color(0xFF4DB6AC),
+                            activeColor: mainGreen,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(4),
                             ),
@@ -190,11 +224,11 @@ class _LoginPageState extends State<LoginPage> {
                       onTap: () =>
                           Navigator.pushNamed(context, '/forgot_password'),
                       child: Text(
-                        "Şifremi unuttum?",
+                        "Şifremi unuttum",
                         style: GoogleFonts.poppins(
-                          color: Colors.grey[700],
+                          color: mainGreen,
                           fontSize: 13,
-                          fontWeight: FontWeight.w500,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
@@ -205,29 +239,38 @@ class _LoginPageState extends State<LoginPage> {
 
                 SizedBox(
                   width: double.infinity,
-                  height: 50,
+                  height: 55,
                   child: ElevatedButton(
                     onPressed: _isLoading ? null : _login,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: mainGreen,
+                      elevation: 2,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(16),
                       ),
                     ),
                     child: _isLoading
-                        ? const CircularProgressIndicator(color: Colors.white)
+                        ? const SizedBox(
+                            height: 24,
+                            width: 24,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2.5,
+                            ),
+                          )
                         : Text(
-                            "Giriş Yap",
+                            "GİRİŞ YAP",
                             style: GoogleFonts.poppins(
                               fontSize: 16,
-                              fontWeight: FontWeight.w600,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1,
                               color: Colors.white,
                             ),
                           ),
                   ),
                 ),
 
-                const SizedBox(height: 20),
+                const SizedBox(height: 30),
 
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -241,10 +284,10 @@ class _LoginPageState extends State<LoginPage> {
                         Navigator.pushNamed(context, '/register');
                       },
                       child: Text(
-                        "Kayıt olun",
+                        "Kayıt Olun",
                         style: GoogleFonts.poppins(
                           color: mainGreen,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),
@@ -260,44 +303,40 @@ class _LoginPageState extends State<LoginPage> {
 
   Widget _buildCard({
     required String label,
+    required IconData icon,
     required TextEditingController controller,
     required Color lightGray,
     bool isPassword = false,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
         color: lightGray,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        border: Border.all(color: Colors.grey.shade200),
       ),
       child: TextField(
         controller: controller,
-
         obscureText: isPassword ? !_passwordVisible : false,
+        style: GoogleFonts.poppins(fontSize: 15),
         decoration: InputDecoration(
           labelText: label,
-          labelStyle: GoogleFonts.poppins(color: Colors.grey[700]),
-          border: InputBorder.none,
-
-          suffixIconConstraints: const BoxConstraints(
-            minWidth: 40,
-            minHeight: 40,
+          labelStyle: GoogleFonts.poppins(
+            color: Colors.grey[500],
+            fontSize: 14,
           ),
-
+          prefixIcon: Icon(icon, color: const Color(0xFF4DB6AC), size: 22),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 16,
+          ),
           suffixIcon: isPassword
               ? IconButton(
                   icon: Icon(
                     _passwordVisible ? Icons.visibility : Icons.visibility_off,
-                    color: Colors.grey[600],
-                    size: 22,
+                    color: Colors.grey[500],
+                    size: 20,
                   ),
                   onPressed: () {
                     setState(() {

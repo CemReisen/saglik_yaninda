@@ -3,17 +3,27 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});
 
-  void _updateProfileData(String uid, String field, dynamic value) {
-    FirebaseFirestore.instance.collection('users').doc(uid).set({
+  Future<void> _updateProfileData(
+    String uid,
+    String field,
+    dynamic value,
+  ) async {
+    await FirebaseFirestore.instance.collection('users').doc(uid).set({
       field: value,
     }, SetOptions(merge: true));
+
+    // 🔥 GÜNCEL: "silentMode" (Sessiz Bildirim) telefonun hafızasına da kaydedilir
+    if (field == "notifications" || field == "silentMode") {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(field, value as bool);
+    }
   }
 
-  // 🔥 İSİM DÜZENLEME DİYALOGU
   void _showEditNameDialog(
     BuildContext context,
     String uid,
@@ -248,15 +258,25 @@ class ProfilePage extends StatelessWidget {
       builder: (context, userSnapshot) {
         var userData = userSnapshot.data?.data() as Map<String, dynamic>? ?? {};
 
-        // 🔥 FIREBASE AUTH DEĞİL, FIRESTORE 'NAME' ALANINA BAKIYORUZ
         String displayName =
             userData['name'] ?? user.email?.split('@').first ?? "Kullanıcı";
         String bloodType = userData['bloodType'] ?? "Belirlenmedi";
         String heightWeight = userData['heightWeight'] ?? "Belirlenmedi";
+
         bool notifications = userData['notifications'] ?? true;
-        bool soundReminder = userData['soundReminder'] ?? true;
+        // 🔥 GÜNCEL: "silentMode" (Sessiz Bildirim). Varsayılanı "false" (Yani ses açık)
+        bool silentMode = userData['silentMode'] ?? false;
+
         int totalScore = userData['totalScore'] ?? 0;
         String connectionCode = userData['connectionCode'] ?? "Kod Yok";
+
+        SharedPreferences.getInstance().then((prefs) {
+          prefs.setBool('notifications', notifications);
+          prefs.setBool(
+            'silentMode',
+            silentMode,
+          ); // Hafızaya sessiz modu yazıyoruz
+        });
 
         return StreamBuilder<QuerySnapshot>(
           stream: FirebaseFirestore.instance
@@ -268,10 +288,16 @@ class ProfilePage extends StatelessWidget {
             int uniqueMedicinesCount = 0;
             if (medSnapshot.hasData) {
               final docs = medSnapshot.data!.docs;
-              final uniqueNames = docs.map((doc) {
-                final data = doc.data() as Map<String, dynamic>;
-                return (data['name']?.toString().toLowerCase().trim() ?? "");
-              }).toSet();
+              final uniqueNames = docs
+                  .map(
+                    (doc) =>
+                        ((doc.data() as Map<String, dynamic>)['name']
+                            ?.toString()
+                            .toLowerCase()
+                            .trim() ??
+                        ""),
+                  )
+                  .toSet();
               uniqueNames.remove("");
               uniqueMedicinesCount = uniqueNames.length;
             }
@@ -282,7 +308,6 @@ class ProfilePage extends StatelessWidget {
               child: Column(
                 children: [
                   const SizedBox(height: 10),
-                  // 🔥 DÜZELTİLMİŞ KART: İsmi ve UID'yi gönderiyoruz
                   _buildColorUserCard(
                     context,
                     displayName,
@@ -342,11 +367,12 @@ class ProfilePage extends StatelessWidget {
                         "notifications",
                         isLast: false,
                       ),
+                      // 🔥 GÜNCEL: "Sesli Hatırlatıcı" yerine "Sessiz Bildirim"
                       _buildSwitchRow(
                         user.uid,
-                        "Sesli Hatırlatıcı",
-                        soundReminder,
-                        "soundReminder",
+                        "Sessiz Bildirim",
+                        silentMode,
+                        "silentMode",
                         isLast: true,
                       ),
                     ],
@@ -406,11 +432,10 @@ class ProfilePage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          // 🔥 İSİM VE DÜZENLEME BUTONU
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const SizedBox(width: 32), // İkonu dengelemek için boşluk
+              const SizedBox(width: 32),
               Text(
                 name,
                 style: GoogleFonts.poppins(
