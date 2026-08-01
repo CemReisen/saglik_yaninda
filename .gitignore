@@ -1,0 +1,14 @@
+# Servis hesabı / kimlik bilgisi dosyaları — asla commit edilmemeli
+serviceAccountKey.json
+*.serviceAccountKey.json
+saglik-yaninda-backend/
+
+# Genel anahtar/sertifika dosyaları
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Ortam değişkeni dosyaları
+.env
+.env.*
