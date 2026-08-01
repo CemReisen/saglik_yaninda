@@ -1,0 +1,134 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------------------------------------------------------------------
+    // Yardımcı fonksiyonlar
+    // ---------------------------------------------------------------------
+
+    // relations dokümanlarının ID'si her zaman "{elderId}_{caregiverId}"
+    // biçimindedir (bkz. relations bloğu). Bu sayede bir kullanıcının bir
+    // ilişkinin tarafı olup olmadığı, doküman OKUNMADAN, salt yoldan
+    // anlaşılabilir.
+    function relationParticipants(relationId) {
+      return relationId.split('_');
+    }
+
+    function isRelationParticipant(relationId) {
+      return request.auth != null &&
+        request.auth.uid in relationParticipants(relationId);
+    }
+
+    // elderId/caregiverId arasında ONAYLI bir ilişki var mı?
+    function isApprovedRelation(elderId, caregiverId) {
+      let relId = elderId + '_' + caregiverId;
+      return exists(/databases/$(database)/documents/relations/$(relId)) &&
+        get(/databases/$(database)/documents/relations/$(relId)).data.status == 'approved';
+    }
+
+    // ---------------------------------------------------------------------
+    // users/{uid}
+    // ---------------------------------------------------------------------
+    match /users/{uid} {
+      // Kendi profilini her zaman okuyup yazabilirsin.
+      // Başkasının profilini okuyabilmek için onunla (elder<->caregiver)
+      // bekleyen veya onaylı bir relations dokümanı olması yeterli
+      // (ör. bekleyen takip isteğinde gönderenin adını göstermek için).
+      allow read: if request.auth != null &&
+        (request.auth.uid == uid ||
+         exists(/databases/$(database)/documents/relations/$(uid + '_' + request.auth.uid)) ||
+         exists(/databases/$(database)/documents/relations/$(request.auth.uid + '_' + uid)));
+
+      allow create, update: if request.auth != null && request.auth.uid == uid;
+      allow delete: if false;
+
+      // users/{uid}/medicines/{medId}
+      match /medicines/{medId} {
+        // Sahibi tam erişime sahip. Onaylı bir caregiver, elder'ın
+        // ilaçlarını SADECE okuyabilir (caregiver dashboard'u için),
+        // yazamaz/silemez.
+        allow read: if request.auth != null &&
+          (request.auth.uid == uid || isApprovedRelation(uid, request.auth.uid));
+
+        allow create, update, delete: if request.auth != null && request.auth.uid == uid;
+      }
+    }
+
+    // ---------------------------------------------------------------------
+    // relations/{relationId}  — relationId == "{elderId}_{caregiverId}"
+    // ---------------------------------------------------------------------
+    match /relations/{relationId} {
+      // ÖNEMLİ: get() ve list() (where() sorguları) burada BİLEREK ayrı
+      // kurallara sahip. Firestore, bir list/where() sorgusunu SADECE
+      // resource.data alanlarına dayanan koşullarla "kanıtlanabilir" güvenli
+      // sayar; relationId'yi (path) parse eden bir koşul list sorgularında
+      // TOPYEKÛN reddedilir (ampirik olarak doğrulandı — bkz. proje notları).
+      // Bu yüzden list() burada resource.data.elderId/caregiverId kullanıyor.
+      allow get: if request.auth != null &&
+        (resource == null ||
+         resource.data.elderId == request.auth.uid ||
+         resource.data.caregiverId == request.auth.uid);
+
+      allow list: if request.auth != null &&
+        (resource.data.elderId == request.auth.uid ||
+         resource.data.caregiverId == request.auth.uid);
+
+      // Takip isteğini SADECE caregiver başlatabilir; doküman ID'si ile
+      // içindeki elderId/caregiverId birbirini doğrulamalı, başlangıç
+      // durumu her zaman "pending" olmalı.
+      allow create: if request.auth != null &&
+        request.auth.uid == request.resource.data.caregiverId &&
+        relationParticipants(relationId)[0] == request.resource.data.elderId &&
+        relationParticipants(relationId)[1] == request.resource.data.caregiverId &&
+        request.resource.data.status == 'pending';
+
+      // Sadece elder, "pending" durumundaki bir isteği "approved"a
+      // çevirebilir; başka hiçbir alan değiştirilemez.
+      allow update: if request.auth != null &&
+        request.auth.uid == resource.data.elderId &&
+        resource.data.status == 'pending' &&
+        request.resource.data.status == 'approved' &&
+        request.resource.data.elderId == resource.data.elderId &&
+        request.resource.data.caregiverId == resource.data.caregiverId;
+
+      // İki taraftan biri isteği reddedebilir / takipten çıkabilir.
+      allow delete: if isRelationParticipant(relationId);
+    }
+
+    // ---------------------------------------------------------------------
+    // notification_requests/{requestId}
+    // ---------------------------------------------------------------------
+    match /notification_requests/{requestId} {
+      // Client asla okuyamaz; sadece Cloud Functions (Admin SDK, güvenlik
+      // kurallarına tabi değildir) bu koleksiyonu işler.
+      allow read: if false;
+
+      allow create: if request.auth != null &&
+        request.resource.data.type is string &&
+        request.resource.data.caregiverId is string &&
+        request.resource.data.elderId is string &&
+        request.resource.data.timestamp == request.time &&
+        (
+          // elder ilacını aldı / SOS bastı -> caregiver'a bildirilir.
+          // Yazan kişi elder olmalı VE aralarında onaylı bir ilişki olmalı.
+          (
+            request.resource.data.type in ['medicine_taken', 'sos'] &&
+            request.auth.uid == request.resource.data.elderId &&
+            isApprovedRelation(request.resource.data.elderId, request.resource.data.caregiverId)
+          ) ||
+          // caregiver, elder'ı dürtüyor -> elder'a bildirilir.
+          // Yazan kişi caregiver olmalı VE aralarında onaylı bir ilişki olmalı.
+          (
+            request.resource.data.type == 'nudge' &&
+            request.auth.uid == request.resource.data.caregiverId &&
+            isApprovedRelation(request.resource.data.elderId, request.resource.data.caregiverId)
+          )
+        );
+
+      // Bu koleksiyon tek kullanımlık "olay" kaydıdır; oluşturulduktan
+      // sonra hiç kimse (client) güncelleyemez ya da silemez.
+      allow update, delete: if false;
+    }
+  }
+}

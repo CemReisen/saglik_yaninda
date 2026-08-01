@@ -1,6 +1,3 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import 'package:googleapis_auth/auth_io.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -146,90 +143,22 @@ class _HomePageState extends State<HomePage> {
         }
       }
 
-      final serviceAccountJson = {
-        "type": "service_account",
-        "project_id": "saglik-yaninda-ec8d2",
-        "private_key_id": "dc5936fc74222f26f17138383be1969169dae159",
-        "private_key":
-            "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCs62iSyZ+yO/l3\nR5yUVVAjZnvQ3wr+y1iX5Rk3Qrn8DUSPLF0adfoEPI2LdobLuldfn9C83H4RBGPO\nIz4EuMPvidw30wo0hZRi8YL0xkxx2h34IldAzPhrpCpTBlbdUiCbZsWZybR1Op42\nR1y345bO2SU7c62bWHjtvD4LZgJDJE0d4gzSQ9dciPqiZy8q0PXZTnu77UulfLOJ\nhinlnn/cbJHa6HDe2nNU/uPLPLvLC6X3Qabn6y6ByFCApeBGK6AQhn3eDpqrlIgp\nZn83ICP28lFq9JY/WcV1YmYlH3uCOHFefJrvKurJnTjpNRqLX8Hu6FVGGHZxN3QL\nDpM8GdIVAgMBAAECggEACF8OLTsLGukZ4usp2qmFq20Q9fPyV5L3G0VpUtpNYDUx\nOkAy0q7e93kJ/jQzAuZmx/eX9qizBrZgcZCVtktOmwhgy6gRIKlN3XtlNF3sQf/F\n/ycEc9voc+ea7/GI34aUEwnm65LPBHTdx3FtfO6M9L8g9Q+c2j4ufo3kMA+UcPUa\nz6C31hKczZFqfBIFFwFTwlSnlyn8p1o78X4/VEGdIFLG5MykofCIojCmsn2ECrY+\n+unEh0o7kAf9axtRRXoXuJWUk7nWwpwXjJXC+vJSr/ja2+st0lqVAMOn+g/2FC4g\n5r4fJ/lYgAiLN/dY6VpKDBjo/dMevmE6QQfSfiyYeQKBgQDZebLR4rSpXIjrFm1E\nPzF/JGqeByUzanGyQuEtF3wjjzRJqd4MPxWxDmRTzlcb9WHH8sStvMQJHCDVv8b5\n1Z/2rEAp2nSVWx+eN2OGRQnh/nONYFab7P06NBXGjp9D3DcrSR2J2Wb0LAUCVD/O\nXzkbxeoI1QXEEKEroY325Sq8mQKBgQDLjSVefs2fEYMIJRRj6J++tQShoQwg6t6F\nxBj4KlgROjSnWxiEz8OVQSeSf3jLh0sLXvqbm3LDBKoBSpWlZvmU9q1klzm4yWX+\nfHISxNZc5XhDkMbJPbvJVgXm4KMaaHwIWRs3kKbbiN/nTlTcce3aeYXD3B2arOtb\nStChV6xS3QKBgQCnDmQ99D9BRhLrO5wN69kyyJ+Z6vU5rM/P1q4wvDShADVzTKiE\nkcUw8FRDSGMD2BgXxzYsG7AfK1tRtvK7Ic2yaBkVzXj27ju4huXN06TG1HahKFr/\nhinzluUPVKmlMDm054JoTPdYI6RpaJxnBCDTY9HmnPTD6t5TrNNn0BxnKQKBgAxD\GHk00lY+y9H1yeCq5tSqOvkxpnVlMLqGMarhgiSniPx79GIr0fBv2F5u52v7Xn30\n3sv49VTiNwuU3qb0KRzcL13b7lI/b7GA9a5DxVYbTL9lPVRqL6HVWM2rwqeYm8A0\n/fq+8A5RlItuoJYXFukOYQyHehETUapSO3c8vNjRAoGADlXsYWSgxrqoox+XiWFJ\nnU/lixghqtFHTs2KXSal+FAO3tRfF8ulFqLyOC8PFHux9ormPLgnyX+84hgCDDtm\n8gbcV48ruW1RlRmy2OacwiOUrfSFardO0e4t/S2YnWkwZtw79C1ANApgb+iYwECa\nZtHb7XLVVuLQ5a9CaJLo2O4=\n-----END PRIVATE KEY-----\n",
-        "client_email":
-            "firebase-adminsdk-fbsvc@saglik-yaninda-ec8d2.iam.gserviceaccount.com",
-        "client_id": "115323197056912168379",
-        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-        "token_uri": "https://oauth2.googleapis.com/token",
-        "auth_provider_x509_cert_url":
-            "https://www.googleapis.com/oauth2/v1/certs",
-        "client_x509_cert_url":
-            "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40saglik-yaninda-ec8d2.iam.gserviceaccount.com",
-        "universe_domain": "googleapis.com",
-      };
-
-      List<String> scopes = [
-        "https://www.googleapis.com/auth/firebase.messaging",
-      ];
-      http.Client client = http.Client();
-      AccessCredentials credentials =
-          await obtainAccessCredentialsViaServiceAccount(
-            ServiceAccountCredentials.fromJson(serviceAccountJson),
-            scopes,
-            client,
-          );
-
-      String bearerToken = credentials.accessToken.data;
-      String projectId = serviceAccountJson["project_id"]!;
-
       for (var doc in relations.docs) {
         String caregiverId = doc['caregiverId'];
-        var caregiverDoc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(caregiverId)
-            .get();
-
-        if (caregiverDoc.exists) {
-          var data = caregiverDoc.data() as Map<String, dynamic>;
-          String? fcmToken = data['fcmToken'];
-
-          if (fcmToken != null && fcmToken.isNotEmpty) {
-            var response = await client.post(
-              Uri.parse(
-                'https://fcm.googleapis.com/v1/projects/$projectId/messages:send',
-              ),
-              headers: <String, String>{
-                'Content-Type': 'application/json',
-                'Authorization': 'Bearer $bearerToken',
-              },
-              body: jsonEncode({
-                "message": {
-                  "token": fcmToken,
-                  "notification": {
-                    "title": "💊 İlaç Alındı",
-                    "body": "$elderName, \"$medicineName\" adlı ilacını içti!",
-                  },
-                  "android": {
-                    "notification": {
-                      "icon": "ic_stat_name",
-                      "color": "#4DB6AC",
-                    },
-                  },
-                },
-              }),
-            );
-
-            if (response.statusCode != 200 && mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text("FCM HTTP Hatası: ${response.statusCode}"),
-                  backgroundColor: Colors.redAccent,
-                  duration: const Duration(seconds: 4),
-                ),
-              );
-            }
-          }
-        }
+        await FirebaseFirestore.instance
+            .collection('notification_requests')
+            .add({
+              'type': 'medicine_taken',
+              'caregiverId': caregiverId,
+              'elderId': user!.uid,
+              'elderName': elderName,
+              'callerName': elderName,
+              'medicineName': medicineName,
+              'timestamp': FieldValue.serverTimestamp(),
+            });
       }
-      client.close();
     } catch (e) {
-      print("Bildirim gönderme hatası: $e");
+      print("Bildirim isteği gönderme hatası: $e");
     }
   }
 
@@ -278,78 +207,20 @@ class _HomePageState extends State<HomePage> {
         if (dbName != null && dbName.trim().isNotEmpty) elderName = dbName;
       }
 
-      final serviceAccountJson = {
-        "type": "service_account",
-        "project_id": "saglik-yaninda-ec8d2",
-        "private_key_id": "dc5936fc74222f26f17138383be1969169dae159",
-        "private_key":
-            "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCs62iSyZ+yO/l3\nR5yUVVAjZnvQ3wr+y1iX5Rk3Qrn8DUSPLF0adfoEPI2LdobLuldfn9C83H4RBGPO\nIz4EuMPvidw30wo0hZRi8YL0xkxx2h34IldAzPhrpCpTBlbdUiCbZsWZybR1Op42\nR1y345bO2SU7c62bWHjtvD4LZgJDJE0d4gzSQ9dciPqiZy8q0PXZTnu77UulfLOJ\nhinlnn/cbJHa6HDe2nNU/uPLPLvLC6X3Qabn6y6ByFCApeBGK6AQhn3eDpqrlIgp\nZn83ICP28lFq9JY/WcV1YmYlH3uCOHFefJrvKurJnTjpNRqLX8Hu6FVGGHZxN3QL\nDpM8GdIVAgMBAAECggEACF8OLTsLGukZ4usp2qmFq20Q9fPyV5L3G0VpUtpNYDUx\nOkAy0q7e93kJ/jQzAuZmx/eX9qizBrZgcZCVtktOmwhgy6gRIKlN3XtlNF3sQf/F\n/ycEc9voc+ea7/GI34aUEwnm65LPBHTdx3FtfO6M9L8g9Q+c2j4ufo3kMA+UcPUa\nz6C31hKczZFqfBIFFwFTwlSnlyn8p1o78X4/VEGdIFLG5MykofCIojCmsn2ECrY+\n+unEh0o7kAf9axtRRXoXuJWUk7nWwpwXjJXC+vJSr/ja2+st0lqVAMOn+g/2FC4g\n5r4fJ/lYgAiLN/dY6VpKDBjo/dMevmE6QQfSfiyYeQKBgQDZebLR4rSpXIjrFm1E\nPzF/JGqeByUzanGyQuEtF3wjjzRJqd4MPxWxDmRTzlcb9WHH8sStvMQJHCDVv8b5\n1Z/2rEAp2nSVWx+eN2OGRQnh/nONYFab7P06NBXGjp9D3DcrSR2J2Wb0LAUCVD/O\nXzkbxeoI1QXEEKEroY325Sq8mQKBgQDLjSVefs2fEYMIJRRj6J++tQShoQwg6t6F\nxBj4KlgROjSnWxiEz8OVQSeSf3jLh0sLXvqbm3LDBKoBSpWlZvmU9q1klzm4yWX+\nfHISxNZc5XhDkMbJPbvJVgXm4KMaaHwIWRs3kKbbiN/nTlTcce3aeYXD3B2arOtb\nStChV6xS3QKBgQCnDmQ99D9BRhLrO5wN69kyyJ+Z6vU5rM/P1q4wvDShADVzTKiE\nkcUw8FRDSGMD2BgXxzYsG7AfK1tRtvK7Ic2yaBkVzXj27ju4huXN06TG1HahKFr/\nhinzluUPVKmlMDm054JoTPdYI6RpaJxnBCDTY9HmnPTD6t5TrNNn0BxnKQKBgAxD\GHk00lY+y9H1yeCq5tSqOvkxpnVlMLqGMarhgiSniPx79GIr0fBv2F5u52v7Xn30\n3sv49VTiNwuU3qb0KRzcL13b7lI/b7GA9a5DxVYbTL9lPVRqL6HVWM2rwqeYm8A0\n/fq+8A5RlItuoJYXFukOYQyHehETUapSO3c8vNjRAoGADlXsYWSgxrqoox+XiWFJ\nnU/lixghqtFHTs2KXSal+FAO3tRfF8ulFqLyOC8PFHux9ormPLgnyX+84hgCDDtm\n8gbcV48ruW1RlRmy2OacwiOUrfSFardO0e4t/S2YnWkwZtw79C1ANApgb+iYwECa\nZtHb7XLVVuLQ5a9CaJLo2O4=\n-----END PRIVATE KEY-----\n",
-        "client_email":
-            "firebase-adminsdk-fbsvc@saglik-yaninda-ec8d2.iam.gserviceaccount.com",
-        "client_id": "115323197056912168379",
-        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-        "token_uri": "https://oauth2.googleapis.com/token",
-        "auth_provider_x509_cert_url":
-            "https://www.googleapis.com/oauth2/v1/certs",
-        "client_x509_cert_url":
-            "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40saglik-yaninda-ec8d2.iam.gserviceaccount.com",
-        "universe_domain": "googleapis.com",
-      };
-
-      List<String> scopes = [
-        "https://www.googleapis.com/auth/firebase.messaging",
-      ];
-      http.Client client = http.Client();
-      AccessCredentials credentials =
-          await obtainAccessCredentialsViaServiceAccount(
-            ServiceAccountCredentials.fromJson(serviceAccountJson),
-            scopes,
-            client,
-          );
-
-      String bearerToken = credentials.accessToken.data;
-      String projectId = serviceAccountJson["project_id"]!;
-
       for (var doc in relations.docs) {
         String caregiverId = doc['caregiverId'];
-        var caregiverDoc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(caregiverId)
-            .get();
-        if (caregiverDoc.exists) {
-          var data = caregiverDoc.data() as Map<String, dynamic>;
-          String? fcmToken = data['fcmToken'];
-
-          if (fcmToken != null && fcmToken.isNotEmpty) {
-            await client.post(
-              Uri.parse(
-                'https://fcm.googleapis.com/v1/projects/$projectId/messages:send',
-              ),
-              headers: <String, String>{
-                'Content-Type': 'application/json',
-                'Authorization': 'Bearer $bearerToken',
-              },
-              body: jsonEncode({
-                "message": {
-                  "token": fcmToken,
-                  "notification": {
-                    "title": "🚨 ACİL DURUM YARDIMI!",
-                    "body":
-                        "$elderName acil yardım çağrısında bulundu! Lütfen hemen iletişime geçin.",
-                  },
-                  "android": {
-                    "notification": {
-                      "icon": "ic_stat_name",
-                      "color": "#4DB6AC",
-                    },
-                  },
-                },
-              }),
-            );
-          }
-        }
+        await FirebaseFirestore.instance
+            .collection('notification_requests')
+            .add({
+              'type': 'sos',
+              'caregiverId': caregiverId,
+              'elderId': user!.uid,
+              'elderName': elderName,
+              'callerName': elderName,
+              'medicineName': '',
+              'timestamp': FieldValue.serverTimestamp(),
+            });
       }
-      client.close();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1851,7 +1722,11 @@ class _AiAssistantPageState extends State<AiAssistantPage> {
     },
   ];
 
-  final String _geminiApiKey = "AIzaSyD5UymazkfTcD-8_3nZlDtQzAmdzoMW6IY";
+  // Build zamanında inject edilir: --dart-define=GEMINI_API_KEY=xxxx
+  static const String _geminiApiKey = String.fromEnvironment(
+    'GEMINI_API_KEY',
+  );
+  bool get _hasApiKey => _geminiApiKey.isNotEmpty;
 
   @override
   void initState() {
@@ -1905,11 +1780,24 @@ class _AiAssistantPageState extends State<AiAssistantPage> {
 
     setState(() {
       _messages.add({"role": "user", "text": userMessage});
-      _isTyping = true;
       _textController.clear();
     });
     FocusScope.of(context).unfocus();
     _scrollToBottom();
+
+    if (!_hasApiKey) {
+      setState(() {
+        _messages.add({
+          "role": "ai",
+          "text":
+              "⚠️ AI asistan şu anda kullanılamıyor. Lütfen daha sonra tekrar deneyin.",
+        });
+      });
+      _scrollToBottom();
+      return;
+    }
+
+    setState(() => _isTyping = true);
 
     try {
       final String userId = FirebaseAuth.instance.currentUser?.uid ?? "";

@@ -1,11 +1,9 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import 'package:googleapis_auth/auth_io.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:intl/intl.dart';
 import 'package:shimmer/shimmer.dart'; // 🔥 EFSANE ANİMASYON PAKETİ EKLENDİ
 
@@ -179,63 +177,19 @@ class CaregiverHomePage extends StatelessWidget {
         return;
       }
 
-      final serviceAccountJson = {
-        "type": "service_account",
-        "project_id": "saglik-yaninda-ec8d2",
-        "private_key_id": "dc5936fc74222f26f17138383be1969169dae159",
-        "private_key":
-            "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCs62iSyZ+yO/l3\nR5yUVVAjZnvQ3wr+y1iX5Rk3Qrn8DUSPLF0adfoEPI2LdobLuldfn9C83H4RBGPO\nIz4EuMPvidw30wo0hZRi8YL0xkxx2h34IldAzPhrpCpTBlbdUiCbZsWZybR1Op42\nR1y345bO2SU7c62bWHjtvD4LZgJDJE0d4gzSQ9dciPqiZy8q0PXZTnu77UulfLOJ\nhinlnn/cbJHa6HDe2nNU/uPLPLvLC6X3Qabn6y6ByFCApeBGK6AQhn3eDpqrlIgp\nZn83ICP28lFq9JY/WcV1YmYlH3uCOHFefJrvKurJnTjpNRqLX8Hu6FVGGHZxN3QL\nDpM8GdIVAgMBAAECggEACF8OLTsLGukZ4usp2qmFq20Q9fPyV5L3G0VpUtpNYDUx\nOkAy0q7e93kJ/jQzAuZmx/eX9qizBrZgcZCVtktOmwhgy6gRIKlN3XtlNF3sQf/F\n/ycEc9voc+ea7/GI34aUEwnm65LPBHTdx3FtfO6M9L8g9Q+c2j4ufo3kMA+UcPUa\nz6C31hKczZFqfBIFFwFTwlSnlyn8p1o78X4/VEGdIFLG5MykofCIojCmsn2ECrY+\n+unEh0o7kAf9axtRRXoXuJWUk7nWwpwXjJXC+vJSr/ja2+st0lqVAMOn+g/2FC4g\n5r4fJ/lYgAiLN/dY6VpKDBjo/dMevmE6QQfSfiyYeQKBgQDZebLR4rSpXIjrFm1E\nPzF/JGqeByUzanGyQuEtF3wjjzRJqd4MPxWxDmRTzlcb9WHH8sStvMQJHCDVv8b5\n1Z/2rEAp2nSVWx+eN2OGRQnh/nONYFab7P06NBXGjp9D3DcrSR2J2Wb0LAUCVD/O\nXzkbxeoI1QXEEKEroY325Sq8mQKBgQDLjSVefs2fEYMIJRRj6J++tQShoQwg6t6F\nxBj4KlgROjSnWxiEz8OVQSeSf3jLh0sLXvqbm3LDBKoBSpWlZvmU9q1klzm4yWX+\nfHISxNZc5XhDkMbJPbvJVgXm4KMaaHwIWRs3kKbbiN/nTlTcce3aeYXD3B2arOtb\nStChV6xS3QKBgQCnDmQ99D9BRhLrO5wN69kyyJ+Z6vU5rM/P1q4wvDShADVzTKiE\nkcUw8FRDSGMD2BgXxzYsG7AfK1tRtvK7Ic2yaBkVzXj27ju4huXN06TG1HahKFr/\nhinzluUPVKmlMDm054JoTPdYI6RpaJxnBCDTY9HmnPTD6t5TrNNn0BxnKQKBgAxD\GHk00lY+y9H1yeCq5tSqOvkxpnVlMLqGMarhgiSniPx79GIr0fBv2F5u52v7Xn30\n3sv49VTiNwuU3qb0KRzcL13b7lI/b7GA9a5DxVYbTL9lPVRqL6HVWM2rwqeYm8A0\n/fq+8A5RlItuoJYXFukOYQyHehETUapSO3c8vNjRAoGADlXsYWSgxrqoox+XiWFJ\nnU/lixghqtFHTs2KXSal+FAO3tRfF8ulFqLyOC8PFHux9ormPLgnyX+84hgCDDtm\n8gbcV48ruW1RlRmy2OacwiOUrfSFardO0e4t/S2YnWkwZtw79C1ANApgb+iYwECa\nZtHb7XLVVuLQ5a9CaJLo2O4=\n-----END PRIVATE KEY-----\n",
-        "client_email":
-            "firebase-adminsdk-fbsvc@saglik-yaninda-ec8d2.iam.gserviceaccount.com",
-        "client_id": "115323197056912168379",
-        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-        "token_uri": "https://oauth2.googleapis.com/token",
-        "auth_provider_x509_cert_url":
-            "https://www.googleapis.com/oauth2/v1/certs",
-        "client_x509_cert_url":
-            "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40saglik-yaninda-ec8d2.iam.gserviceaccount.com",
-        "universe_domain": "googleapis.com",
-      };
+      if (currentUser == null) return;
 
-      List<String> scopes = [
-        "https://www.googleapis.com/auth/firebase.messaging",
-      ];
-      http.Client client = http.Client();
-      AccessCredentials credentials =
-          await obtainAccessCredentialsViaServiceAccount(
-            ServiceAccountCredentials.fromJson(serviceAccountJson),
-            scopes,
-            client,
-          );
+      await FirebaseFirestore.instance.collection('notification_requests').add({
+        'type': 'nudge',
+        'caregiverId': currentUser.uid,
+        'elderId': elderId,
+        'elderName': elderName,
+        'callerName': caregiverName,
+        'medicineName': '',
+        'timestamp': FieldValue.serverTimestamp(),
+      });
 
-      String bearerToken = credentials.accessToken.data;
-      String projectId = serviceAccountJson["project_id"]!;
-
-      var response = await client.post(
-        Uri.parse(
-          'https://fcm.googleapis.com/v1/projects/$projectId/messages:send',
-        ),
-        headers: <String, String>{
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $bearerToken',
-        },
-        body: jsonEncode({
-          "message": {
-            "token": fcmToken,
-            "notification": {
-              "title": "🔔 İlaç Hatırlatması",
-              "body":
-                  "$caregiverName, ilaçlarını kontrol etmeni istiyor. Lütfen unutma!",
-            },
-            "android": {
-              "notification": {"icon": "ic_stat_name", "color": "#4DB6AC"},
-            },
-          },
-        }),
-      );
-      client.close();
-
-      if (response.statusCode == 200 && context.mounted) {
+      if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text("Hatırlatma başarıyla gönderildi! ✅"),
@@ -871,25 +825,52 @@ class CaregiverHomePage extends StatelessWidget {
                             final currentUserId =
                                 FirebaseAuth.instance.currentUser!.uid;
 
-                            var userQuery = await FirebaseFirestore.instance
-                                .collection('users')
-                                .where('connectionCode', isEqualTo: enteredCode)
-                                .where('role', isEqualTo: 'elder')
-                                .get();
-
-                            if (userQuery.docs.isEmpty) {
+                            // Bağlantı kodu çözümlemesi Cloud Function'a
+                            // (resolveConnectionCode) taşındı: users
+                            // koleksiyonunda connectionCode'a client'tan
+                            // doğrudan sorgu yasak (bkz. firestore.rules) —
+                            // elder'ın tam profilinin rastgele erişime
+                            // açılmaması için Admin SDK ile, sadece
+                            // {elderId, elderName} döndürerek çalışır.
+                            String elderId;
+                            String elderName = "";
+                            try {
+                              final callable = FirebaseFunctions.instance
+                                  .httpsCallable('resolveConnectionCode');
+                              final result = await callable.call(
+                                <String, dynamic>{'code': enteredCode},
+                              );
+                              final data = Map<String, dynamic>.from(
+                                result.data as Map,
+                              );
+                              elderId = data['elderId'] as String;
+                              elderName = (data['elderName'] as String?) ?? "";
+                            } on FirebaseFunctionsException catch (e) {
+                              String message;
+                              switch (e.code) {
+                                case 'not-found':
+                                  message =
+                                      "Geçersiz kod veya kullanıcı bulunamadı! ❌";
+                                  break;
+                                case 'resource-exhausted':
+                                  message =
+                                      e.message ??
+                                      "Çok fazla deneme yaptınız. Lütfen bir dakika sonra tekrar deneyin.";
+                                  break;
+                                case 'unauthenticated':
+                                  message =
+                                      "Oturum süreniz dolmuş, lütfen tekrar giriş yapın.";
+                                  break;
+                                default:
+                                  message =
+                                      "Kod doğrulanamadı. Lütfen tekrar deneyin.";
+                              }
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    "Geçersiz kod veya kullanıcı bulunamadı! ❌",
-                                  ),
-                                ),
+                                SnackBar(content: Text(message)),
                               );
                               setStateDialog(() => isRequesting = false);
                               return;
                             }
-
-                            String elderId = userQuery.docs.first.id;
 
                             if (elderId == currentUserId) {
                               ScaffoldMessenger.of(context).showSnackBar(
@@ -903,41 +884,46 @@ class CaregiverHomePage extends StatelessWidget {
                               return;
                             }
 
-                            var relationQuery = await FirebaseFirestore.instance
+                            // relations dokümanları deterministik ID kullanır:
+                            // "{elderId}_{caregiverId}" — Firestore güvenlik
+                            // kuralları, onaylı ilişkiyi bu sabit yoldan
+                            // exists()/get() ile doğrulayabilsin diye.
+                            final relationRef = FirebaseFirestore.instance
                                 .collection('relations')
-                                .where('caregiverId', isEqualTo: currentUserId)
-                                .where('elderId', isEqualTo: elderId)
-                                .get();
+                                .doc('${elderId}_$currentUserId');
 
-                            if (relationQuery.docs.isNotEmpty) {
+                            var existingRelation = await relationRef.get();
+
+                            if (existingRelation.exists) {
+                              String existingStatus =
+                                  existingRelation.data()!['status'];
+                              String message = existingStatus == 'approved'
+                                  ? "Bu kişiyle zaten bağlısınız. ✅"
+                                  : "İsteğiniz zaten beklemede. ⏳";
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    "Bu kişiye zaten bir istek gönderdiniz. ⚠️",
-                                  ),
-                                ),
+                                SnackBar(content: Text(message)),
                               );
                               setStateDialog(() => isRequesting = false);
                               return;
                             }
 
-                            await FirebaseFirestore.instance
-                                .collection('relations')
-                                .add({
-                                  'caregiverId': currentUserId,
-                                  'elderId': elderId,
-                                  'status': 'pending',
-                                  'createdAt': FieldValue.serverTimestamp(),
-                                });
+                            await relationRef.set({
+                              'caregiverId': currentUserId,
+                              'elderId': elderId,
+                              'status': 'pending',
+                              'createdAt': FieldValue.serverTimestamp(),
+                            });
 
                             if (context.mounted) {
                               Navigator.pop(context);
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
+                                SnackBar(
                                   content: Text(
-                                    "İstek başarıyla gönderildi! ✅",
+                                    elderName.trim().isNotEmpty
+                                        ? "İsteğiniz $elderName kişisine gönderildi! ✅"
+                                        : "İstek başarıyla gönderildi! ✅",
                                   ),
-                                  backgroundColor: Color(0xFF3949AB),
+                                  backgroundColor: const Color(0xFF3949AB),
                                 ),
                               );
                             }

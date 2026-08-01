@@ -59,6 +59,16 @@ class NotificationsPage extends StatelessWidget {
                   );
                 }
 
+                if (snapshot.hasError) {
+                  debugPrint(
+                    "⚠️ Takip istekleri sorgusu başarısız: ${snapshot.error}",
+                  );
+                  return _buildEmptyState(
+                    Icons.error_outline,
+                    "Takip istekleri yüklenemedi. Lütfen daha sonra tekrar deneyin.",
+                  );
+                }
+
                 if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                   return _buildEmptyState(
                     Icons.mark_email_read_outlined,
