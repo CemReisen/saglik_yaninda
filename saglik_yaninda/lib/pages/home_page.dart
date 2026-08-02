@@ -1,6 +1,9 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:saglik_yaninda/services/notification_service.dart';
 import 'package:intl/intl.dart';
@@ -627,19 +630,104 @@ class _HomePageState extends State<HomePage> {
                   );
                   return;
                 }
+
+                // 🔥 Saat değiştiyse eski OS alarmları hâlâ eski saatte
+                // çalar — önce eskilerini iptal edip, tamamlandığından emin
+                // olduktan SONRA yenilerini kuruyoruz. Aksi halde yeni
+                // id'ler (Random().nextInt) eskilerle çakışırsa
+                // flutter_local_notifications tarafında belirsiz davranış
+                // oluşabilir.
+                final List<int> oldNotificationIds =
+                    NotificationService.extractNotificationIds(data);
+                await NotificationService.cancelNotifications(
+                  oldNotificationIds,
+                );
+
+                final String medName = nameCtrl.text.trim();
+                final String medDose = doseCtrl.text.trim();
+                final String notificationType =
+                    data['notificationType'] ?? "Standart";
+                final String repeatType = data['repeatType'] ?? "daily";
+                final List<String> days =
+                    (data['days'] as List?)?.whereType<String>().toList() ??
+                    [];
+                final DateTime? endDate = NotificationService.parseDdMmYyyy(
+                  data['endDate'] as String?,
+                );
+                final DateTime now = DateTime.now();
+                final DateTime todayOnly = DateTime(
+                  now.year,
+                  now.month,
+                  now.day,
+                );
+                final bool alreadyExpired =
+                    endDate != null && endDate.isBefore(todayOnly);
+
+                final List<int> newNotificationIds = [];
+
+                if (!alreadyExpired) {
+                  if (repeatType == "daily") {
+                    final int id = Random().nextInt(1000000);
+                    DateTime scheduledDate = DateTime(
+                      now.year,
+                      now.month,
+                      now.day,
+                      selectedTime.hour,
+                      selectedTime.minute,
+                    );
+                    if (scheduledDate.isBefore(now)) {
+                      scheduledDate = scheduledDate.add(
+                        const Duration(days: 1),
+                      );
+                    }
+                    await NotificationService.scheduleNotification(
+                      id: id,
+                      title: "İlaç Vakti: $medName",
+                      body: "$medDose - $selectedHunger",
+                      scheduledDate: scheduledDate,
+                      notificationType: notificationType,
+                    );
+                    newNotificationIds.add(id);
+                  } else {
+                    for (final dayName in days) {
+                      final int dayIndex = NotificationService.weekDays
+                          .indexOf(dayName);
+                      if (dayIndex == -1) continue;
+                      final int id = Random().nextInt(1000000);
+                      final DateTime scheduledDate =
+                          NotificationService.nextInstanceOfWeekdayTime(
+                            dayIndex + 1,
+                            selectedTime,
+                          );
+                      await NotificationService.scheduleNotification(
+                        id: id,
+                        title: "İlaç Vakti: $medName",
+                        body: "$medDose - $selectedHunger",
+                        scheduledDate: scheduledDate,
+                        notificationType: notificationType,
+                        matchDateTimeComponents:
+                            DateTimeComponents.dayOfWeekAndTime,
+                      );
+                      newNotificationIds.add(id);
+                    }
+                  }
+                }
+
                 await FirebaseFirestore.instance
                     .collection('users')
                     .doc(user!.uid)
                     .collection('medicines')
                     .doc(docId)
                     .update({
-                      'name': nameCtrl.text.trim(),
-                      'dose': doseCtrl.text.trim(),
+                      'name': medName,
+                      'dose': medDose,
                       'description': descCtrl.text.trim(),
                       'hungerStatus': selectedHunger,
                       'isCritical': isCritical,
                       'hour': selectedTime.hour,
                       'minute': selectedTime.minute,
+                      'notificationIds': newNotificationIds,
+                      'notificationsCancelled': alreadyExpired,
                     });
                 Navigator.pop(context);
                 Navigator.pop(context);

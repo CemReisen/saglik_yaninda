@@ -43,5 +43,13 @@ Düzeltme:
 
 `home_page.dart`'taki silme akışı da (`_deleteMedicine`) artık tek id yerine `notificationIds` listesindeki tüm alarmları iptal ediyor.
 
+### Çözülmüş: İlaç düzenlenince (Home → "Düzenle") eski alarm yeniden kurulmuyordu (2026-08-02)
+`home_page.dart` → `_showEditDialog`'daki "Kaydet" sadece Firestore'daki `hour`/`minute` alanını güncelliyordu, eski `notificationId(ler)` ile kurulmuş OS alarmını hiç iptal edip yeniden kurmuyordu — saat değiştirildiğinde alarm eski saatte çalmaya devam ediyordu. Gerçek cihazda test edilip doğrulandı ✅ (saat değişince eski alarm susuyor, yeni saatte doğru çalıyor, art arda düzenlemelerde de tutarlı).
+
+Düzeltme:
+- `NotificationService`'e paylaşılan static yardımcılar eklendi: `weekDays`, `parseDdMmYyyy`, `nextInstanceOfWeekdayTime` — `add_medicine_page.dart`/`main.dart`'taki eşdeğer private mantığın tekilleştirilmiş hali (tek doğruluk kaynağı; o dosyalardaki private kopyalara dokunulmadı).
+- `_showEditDialog`'un Kaydet handler'ı artık: (1) `NotificationService.extractNotificationIds(data)` ile eski id'leri alıp `await NotificationService.cancelNotifications(...)` ile **sırayla, tamamlanmasını bekleyerek** iptal ediyor, (2) `data['repeatType']`/`data['days']`/`data['endDate']`'e göre yeni saatte alarm(lar)ı yeniden kuruyor ("daily" → tek alarm, "custom" → seçili her gün için ayrı alarm), (3) `endDate` geçmişse hiç alarm kurmuyor. Eski-yeni iptal/kurulum sırası bilinçli: `Random().nextInt(1000000)` ile üretilen yeni id'ler eskilerle çakışabileceğinden, önce eskilerin iptalinin **tamamlandığından emin olunuyor**, sonra yenileri kuruluyor.
+- Firestore güncellemesine `notificationIds` (liste) ve `notificationsCancelled` alanları da eklendi — eski tekil `notificationId` alanlı legacy kayıtlar düzenlendiğinde otomatik olarak yeni liste formatına geçiyor.
+
 ### Not: test ortamı sınırlaması (gerçek bug değil)
 Aynı araştırma sürecinde ayrıca fark edildi: **duplicate edilmiş emülatörler Firebase Installations ID'sini (dolayısıyla FCM token'ı) paylaşabiliyor** — elder ve caregiver hesapları klonlanmış bir emülatörde test edilirse ikisi de aynı token'a sahip olur ve bildirim "yanlış yerde" (aynı cihazda) görünür/görünmez gibi kafa karıştırıcı sonuçlar verir. Bu bir kod hatası değildi. **İleride test edilirken emülatör "Duplicate" ile değil "Create Device" ile bağımsız oluşturulmalı**, ya da gerçek cihaz + tek emülatör kombinasyonu tercih edilmeli.

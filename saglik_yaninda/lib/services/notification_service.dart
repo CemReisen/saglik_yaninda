@@ -211,4 +211,46 @@ class NotificationService {
     }
     return [];
   }
+
+  /// "Belirli Günler" alarmlarında kullanılan gün kısaltmaları — index+1,
+  /// DateTime.weekday ile eşleşecek şekilde Pazartesi=1'den başlar.
+  static const List<String> weekDays = [
+    "Pzt",
+    "Sal",
+    "Çar",
+    "Per",
+    "Cum",
+    "Cmt",
+    "Paz",
+  ];
+
+  /// "d.m.yyyy" formatındaki (add_medicine_page.dart'ta yazılan) tarih
+  /// string'ini parse eder.
+  static DateTime? parseDdMmYyyy(String? value) {
+    if (value == null) return null;
+    final parts = value.split('.');
+    if (parts.length != 3) return null;
+    final day = int.tryParse(parts[0]);
+    final month = int.tryParse(parts[1]);
+    final year = int.tryParse(parts[2]);
+    if (day == null || month == null || year == null) return null;
+    return DateTime(year, month, day);
+  }
+
+  /// Verilen haftanın gününe (1=Pzt..7=Paz) ve saate denk gelen, şu andan
+  /// sonraki ilk tarihi döndürür.
+  static DateTime nextInstanceOfWeekdayTime(int targetWeekday, TimeOfDay time) {
+    final DateTime now = DateTime.now();
+    DateTime candidate = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      time.hour,
+      time.minute,
+    );
+    while (candidate.weekday != targetWeekday || candidate.isBefore(now)) {
+      candidate = candidate.add(const Duration(days: 1));
+    }
+    return candidate;
+  }
 }
