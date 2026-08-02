@@ -363,7 +363,7 @@ class _HomePageState extends State<HomePage> {
     return futureMeds.first;
   }
 
-  void _showDeleteConfirmDialog(String docId, int notificationId) {
+  void _showDeleteConfirmDialog(String docId, List<int> notificationIds) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -390,7 +390,7 @@ class _HomePageState extends State<HomePage> {
             onPressed: () {
               Navigator.pop(context);
               Navigator.pop(context);
-              _deleteMedicine(docId, notificationId);
+              _deleteMedicine(docId, notificationIds);
             },
             child: const Text("Sil"),
           ),
@@ -399,7 +399,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Future<void> _deleteMedicine(String docId, int notificationId) async {
+  Future<void> _deleteMedicine(String docId, List<int> notificationIds) async {
     if (_isOffline) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -410,7 +410,7 @@ class _HomePageState extends State<HomePage> {
       return;
     }
     try {
-      await NotificationService.cancelNotification(notificationId);
+      await NotificationService.cancelNotifications(notificationIds);
       await FirebaseFirestore.instance
           .collection('users')
           .doc(user!.uid)
@@ -777,7 +777,7 @@ class _HomePageState extends State<HomePage> {
                 InkWell(
                   onTap: () => _showDeleteConfirmDialog(
                     docId,
-                    data['notificationId'] ?? 0,
+                    NotificationService.extractNotificationIds(data),
                   ),
                   child: const Column(
                     mainAxisSize: MainAxisSize.min,

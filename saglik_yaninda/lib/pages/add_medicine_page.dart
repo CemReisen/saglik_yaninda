@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:saglik_yaninda/main.dart';
 import 'package:saglik_yaninda/services/notification_service.dart';
@@ -176,6 +177,24 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
     }
   }
 
+  /// Verilen haftanın günü (1=Pzt..7=Paz) ve saatte, şimdiden sonraki ilk
+  /// tekrarın tarihini hesaplar (bugün o gün ve saat henüz geçmediyse bugün,
+  /// aksi halde önümüzdeki hafta içindeki ilk uygun gün).
+  DateTime _nextInstanceOfWeekdayTime(int targetWeekday, TimeOfDay time) {
+    final DateTime now = DateTime.now();
+    DateTime candidate = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      time.hour,
+      time.minute,
+    );
+    while (candidate.weekday != targetWeekday || candidate.isBefore(now)) {
+      candidate = candidate.add(const Duration(days: 1));
+    }
+    return candidate;
+  }
+
   Future<void> _saveMedicine() async {
     // 🔥 GÜVENLİK 1: Form içindeki zorunlu alanlar (Ad ve Doz) dolu mu?
     if (!_formKey.currentState!.validate()) return;
@@ -243,16 +262,78 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
     try {
       WriteBatch batch = FirebaseFirestore.instance.batch();
 
+      // 🔥 Bitiş tarihi geçmişte kalmışsa alarmı hiç kurma (baştan engelle) —
+      // doküman yine de kaydedilir, sadece OS alarmı oluşturulmaz.
+      final DateTime now = DateTime.now();
+      final DateTime todayOnly = DateTime(now.year, now.month, now.day);
+      final DateTime endDateOnly = DateTime(
+        _dateRange!.end.year,
+        _dateRange!.end.month,
+        _dateRange!.end.day,
+      );
+      final bool alreadyExpired = endDateOnly.isBefore(todayOnly);
+
       for (var dose in _doseTimes) {
         if (dose['isActive'] == true) {
           TimeOfDay time = dose['time'];
-          int notificationId = Random().nextInt(1000000);
 
           DocumentReference docRef = FirebaseFirestore.instance
               .collection('users')
               .doc(user.uid)
               .collection('medicines')
               .doc();
+
+          List<int> notificationIds = [];
+
+          if (!alreadyExpired) {
+            if (_repeatType == "Her Gün") {
+              int id = Random().nextInt(1000000);
+
+              DateTime scheduledDate = DateTime(
+                now.year,
+                now.month,
+                now.day,
+                time.hour,
+                time.minute,
+              );
+              if (scheduledDate.isBefore(now)) {
+                scheduledDate = scheduledDate.add(const Duration(days: 1));
+              }
+
+              await NotificationService.scheduleNotification(
+                id: id,
+                title: "İlaç Vakti: ${_nameController.text.trim()}",
+                body: "${_doseController.text.trim()} - $_hungerStatus",
+                scheduledDate: scheduledDate,
+                notificationType: _notificationType,
+              );
+              notificationIds.add(id);
+            } else {
+              // "Belirli Günler": flutter_local_notifications haftalık tekrarı
+              // tek bir çağrıda birden fazla gün için desteklemiyor —
+              // seçilen her gün için ayrı bir alarm kuruyoruz.
+              for (int i = 0; i < _weekDays.length; i++) {
+                if (!_selectedDays[i]) continue;
+
+                int id = Random().nextInt(1000000);
+                int targetWeekday = i + 1; // _weekDays[0] = Pzt = weekday 1
+                DateTime scheduledDate = _nextInstanceOfWeekdayTime(
+                  targetWeekday,
+                  time,
+                );
+
+                await NotificationService.scheduleNotification(
+                  id: id,
+                  title: "İlaç Vakti: ${_nameController.text.trim()}",
+                  body: "${_doseController.text.trim()} - $_hungerStatus",
+                  scheduledDate: scheduledDate,
+                  notificationType: _notificationType,
+                  matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
+                );
+                notificationIds.add(id);
+              }
+            }
+          }
 
           batch.set(docRef, {
             'name': _nameController.text.trim(),
@@ -261,7 +342,7 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
             'hour': time.hour,
             'minute': time.minute,
             'label': dose['label'],
-            'notificationId': notificationId,
+            'notificationIds': notificationIds,
             'isTaken': false,
             'repeatType': _repeatType == "Her Gün" ? "daily" : "custom",
             'days': activeDayNames,
@@ -274,27 +355,6 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
                 "${_dateRange!.end.day}.${_dateRange!.end.month}.${_dateRange!.end.year}",
             'createdAt': FieldValue.serverTimestamp(),
           });
-
-          DateTime now = DateTime.now();
-          DateTime scheduledDate = DateTime(
-            now.year,
-            now.month,
-            now.day,
-            time.hour,
-            time.minute,
-          );
-
-          if (scheduledDate.isBefore(now)) {
-            scheduledDate = scheduledDate.add(const Duration(days: 1));
-          }
-
-          await NotificationService.scheduleNotification(
-            id: notificationId,
-            title: "İlaç Vakti: ${_nameController.text.trim()}",
-            body: "${_doseController.text.trim()} - ${_hungerStatus}",
-            scheduledDate: scheduledDate,
-            notificationType: _notificationType,
-          );
         }
       }
 

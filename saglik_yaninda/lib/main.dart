@@ -47,18 +47,92 @@ Future<void> _syncFcmToken(String uid) async {
   }
 }
 
+/// "d.m.y" formatındaki (add_medicine_page.dart'ta yazıldığı gibi, başında
+/// sıfır olmadan) tarih string'ini DateTime'a çevirir. Ayrıştırılamazsa null
+/// döner.
+DateTime? _parseDdMmYyyy(String? value) {
+  if (value == null) return null;
+  final parts = value.split('.');
+  if (parts.length != 3) return null;
+  final day = int.tryParse(parts[0]);
+  final month = int.tryParse(parts[1]);
+  final year = int.tryParse(parts[2]);
+  if (day == null || month == null || year == null) return null;
+  return DateTime(year, month, day);
+}
+
+/// Kullanım süresi (endDate) geçmiş ilaçların kurulu OS alarmlarını iptal
+/// eder. matchDateTimeComponents ile kurulan haftalık/günlük tekrarlar
+/// flutter_local_notifications tarafında kendiliğinden durmadığı için bu
+/// tarama gerekiyor — bir bitiş tarihi geçtiğinde alarmı elle iptal etmemiz
+/// lazım. Zaten işlenmiş ilaçlar `notificationsCancelled` bayrağıyla
+/// atlanır, tekrar taramayı gereksiz Firestore write'larından korur.
+Future<void> _cancelExpiredMedicineAlarms(String uid) async {
+  try {
+    final snap = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('medicines')
+        .get();
+
+    final DateTime now = DateTime.now();
+    final DateTime todayOnly = DateTime(now.year, now.month, now.day);
+
+    for (final doc in snap.docs) {
+      final data = doc.data();
+      if (data['notificationsCancelled'] == true) continue;
+
+      final endDate = _parseDdMmYyyy(data['endDate'] as String?);
+      if (endDate == null) continue;
+      if (!endDate.isBefore(todayOnly)) continue;
+
+      final ids = NotificationService.extractNotificationIds(data);
+      await NotificationService.cancelNotifications(ids);
+      await doc.reference.update({'notificationsCancelled': true});
+      debugPrint(
+        "🧹 Süresi dolmuş ilaç alarmı iptal edildi: ${doc.id} (${ids.length} alarm)",
+      );
+    }
+  } catch (e) {
+    debugPrint("⚠️ Süresi dolmuş ilaç taraması başarısız: $e");
+  }
+}
+
+/// Uygulama arka plandan ön plana her geldiğinde (resumed), süresi dolmuş
+/// ilaç alarmlarını yeniden tarar. authStateChanges sadece oturum açılışında
+/// tetiklendiği için, günün ilerleyen saatlerinde ön plana dönüşlerde de
+/// kontrol sağlamak amacıyla ayrı bir gözlemci kullanıyoruz — bu, ek bir
+/// arka plan görevi paketine (workmanager vb.) ihtiyaç duymadan daha sık bir
+/// kontrol noktası sağlıyor.
+class _AppLifecycleObserver extends WidgetsBindingObserver {
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null) {
+        _cancelExpiredMedicineAlarms(uid);
+      }
+    }
+  }
+}
+
+final _appLifecycleObserver = _AppLifecycleObserver();
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   await NotificationService.init();
 
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+  WidgetsBinding.instance.addObserver(_appLifecycleObserver);
 
   // Giriş yapılı her oturum açılışında (uygulama her başlatıldığında dahil)
-  // Firestore'daki token'ı cihazın güncel token'ıyla karşılaştırıp gerekirse günceller.
+  // Firestore'daki token'ı cihazın güncel token'ıyla karşılaştırıp gerekirse günceller,
+  // ve süresi dolmuş ilaç alarmlarını tarar.
   FirebaseAuth.instance.authStateChanges().listen((user) {
     if (user != null) {
       _syncFcmToken(user.uid);
+      _cancelExpiredMedicineAlarms(user.uid);
     }
   });
 

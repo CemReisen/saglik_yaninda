@@ -106,6 +106,7 @@ class NotificationService {
     required String body,
     required DateTime scheduledDate,
     required String notificationType,
+    DateTimeComponents matchDateTimeComponents = DateTimeComponents.time,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     final bool notificationsOn = prefs.getBool('notifications') ?? true;
@@ -175,7 +176,7 @@ class NotificationService {
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
-      matchDateTimeComponents: DateTimeComponents.time,
+      matchDateTimeComponents: matchDateTimeComponents,
     );
 
     print(
@@ -186,5 +187,28 @@ class NotificationService {
   static Future<void> cancelNotification(int id) async {
     await _noti.cancel(id);
     print("🗑️ Alarm iptal edildi. ID: $id");
+  }
+
+  static Future<void> cancelNotifications(List<int> ids) async {
+    for (final id in ids) {
+      await cancelNotification(id);
+    }
+  }
+
+  /// İlaç dokümanından zamanlanmış alarm id'lerini okur. Yeni kayıtlar
+  /// `notificationIds` (liste, "Belirli Günler" için birden fazla alarm
+  /// içerebilir) kullanır; eski kayıtlarda (hep "Her Gün" tipinde) sadece
+  /// tekil `notificationId` alanı vardır — geriye dönük uyumluluk için o da
+  /// desteklenir.
+  static List<int> extractNotificationIds(Map<String, dynamic> data) {
+    final rawList = data['notificationIds'];
+    if (rawList is List) {
+      return rawList.whereType<int>().toList();
+    }
+    final singleId = data['notificationId'];
+    if (singleId is int) {
+      return [singleId];
+    }
+    return [];
   }
 }
