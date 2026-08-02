@@ -26,12 +26,57 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   print("Arka planda bildirim geldi: ${message.messageId}");
 }
 
+/// Firestore'daki fcmToken'ı cihazın güncel FCM token'ıyla senkronize eder.
+/// Sadece değer farklıysa yazar (gereksiz write'ları önlemek için).
+Future<void> _syncFcmToken(String uid) async {
+  try {
+    final token = await FirebaseMessaging.instance.getToken();
+    if (token == null) return;
+
+    final userRef = FirebaseFirestore.instance.collection('users').doc(uid);
+    final snap = await userRef.get();
+    if (!snap.exists) return;
+
+    final currentToken = snap.data()?['fcmToken'];
+    if (currentToken != token) {
+      await userRef.update({'fcmToken': token});
+      debugPrint("🔄 FCM token senkronize edildi (uid: $uid).");
+    }
+  } catch (e) {
+    debugPrint("⚠️ FCM token senkronizasyonu başarısız: $e");
+  }
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   await NotificationService.init();
 
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
+  // Giriş yapılı her oturum açılışında (uygulama her başlatıldığında dahil)
+  // Firestore'daki token'ı cihazın güncel token'ıyla karşılaştırıp gerekirse günceller.
+  FirebaseAuth.instance.authStateChanges().listen((user) {
+    if (user != null) {
+      _syncFcmToken(user.uid);
+    }
+  });
+
+  // FCM, token'ı arka planda kendiliğinden yenileyebilir (örn. cihaz/uygulama
+  // verisi sıfırlanınca değil, normal rotasyonla da olabilir) — bu durumda
+  // Firestore'daki eski token güncellenmezse bildirimler "NotRegistered"
+  // hatasıyla sessizce başarısız olur. Bu yüzden refresh event'ini de dinliyoruz.
+  FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    FirebaseFirestore.instance.collection('users').doc(uid).update({
+      'fcmToken': newToken,
+    }).then((_) {
+      debugPrint("🔄 FCM token refresh sonrası güncellendi (uid: $uid).");
+    }).catchError((e) {
+      debugPrint("⚠️ FCM token refresh güncellemesi başarısız: $e");
+    });
+  });
 
   FirebaseMessaging.onMessage.listen((RemoteMessage message) {
     if (message.notification != null) {

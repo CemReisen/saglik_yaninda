@@ -15,19 +15,25 @@ Path/ID-bazlı bir kural koşulu (ör. doküman ID'sini `split()` ederek ya da `
 
 **Doğrulama yöntemi:** Yeni bir Firestore kuralı yazıldığında/değiştirildiğinde, teorik akıl yürütmeye güvenmek yerine `@firebase/rules-unit-testing` + Firestore emulator ile (`firebase emulators:exec --only firestore "node test-script.js"`) gerçek client sorgularını simüle ederek doğrulamak — production'a dokunmadan, kesin sonuç verir.
 
-## Proje Durumu (2026-08-01)
+## Proje Durumu (2026-08-02)
+
+### Durum: bildirim mimarisinin tamamı doğrulandı ✅
+Tüm bildirim akışları (bağlantı isteği, ilaç eklendi, ilaç alındı, SOS, dürtme/hatırlatma) gerçek cihaz + emülatör kombinasyonuyla uçtan uca test edildi, sorunsuz çalışıyor.
 
 ### Tamamlanan ve test edilen akışlar
-- **Bağlantı kodu ile bağlanma** (caregiver → elder, `resolveConnectionCode` Cloud Function üzerinden) — çalışıyor.
+- **Bağlantı kodu ile bağlanma / bağlantı isteği** (caregiver → elder, `resolveConnectionCode` Cloud Function üzerinden) — çalışıyor.
 - **İlaç ekleme / senkronizasyon** (`add_medicine_page.dart` → Firestore `medicines` alt koleksiyonu) — çalışıyor.
 - **"İlaç alındı" bildirimi** (elder → caregiver, `notification_requests` + `type: "medicine_taken"` → `onNotificationRequestCreated` Cloud Function) — çalışıyor.
 - **SOS bildirimi** (elder → caregiver, `type: "sos"`) — çalışıyor.
+- **"Dürtme/hatırlatma" bildirimi** (caregiver → elder, `type: "nudge"`) — çalışıyor.
 
-### Açık bug — bir sonraki oturumda buradan devam
-**Caregiver'daki "dürtme/hatırlatma" butonu** (`caregiver_home_page.dart` → `_sendNudgeNotification`) "Hatırlatma başarıyla gönderildi! ✅" mesajı gösteriyor ama **elder'a push bildirimi ulaşmıyor**.
+### Çözülmüş: FCM token senkronizasyon eksikliği (2026-08-02)
+"Dürtme" bildirimi araştırılırken ortaya çıkan asıl kök neden: **`fcmToken` sadece login/register anında bir kere yazılıyordu**, hiçbir yerde `onTokenRefresh` dinlenmiyordu. FCM token cihazda rotasyona uğradığında Firestore'daki değer bayatlıyor, Cloud Function `admin.messaging().send()` başarılı log/message ID döndürse bile bildirim cihaza hiç ulaşmıyordu (`messaging/registration-token-not-registered`).
 
-Kontrol edilecekler (sırayla):
-1. `notification_requests` koleksiyonuna gerçekten `type: "nudge"` alanıyla bir doküman yazılıyor mu (serviceAccountKey.json ile canlı veriyi oku).
-2. Yazılıyorsa: `onNotificationRequestCreated` Cloud Function bu dokümanı doğru işliyor mu — Cloud Functions loglarına bak (`firebase functions:log` ya da Console). `nudge` tipinde `recipientId`'nin `elderId` olması gerekiyor (caregiver/sos'un aksine, yön ters) — `MESSAGE_BUILDERS.nudge` mantığını doğrula.
-3. Elder'ın `users/{elderId}` dokümanında `fcmToken` alanı gerçekten dolu mu (elder cihazda oturum açıp bildirim izni vermiş mi, token güncel mi).
-4. `relations` içinde caregiver-elder arasında gerçekten `approved` bir ilişki var mı (yoksa `isApprovedRelation` reddeder, ama bu durumda "gönderildi" mesajı da görünmemesi beklenirdi — client tarafında `notification_requests.add()` her zaman "başarılı" sayılıyor çünkü yazma işlemi kurala uysun uymasın client sadece Firestore write'ının tamamlandığını görüyor, bildirimin gerçekten gönderilip gönderilmediğini bilmiyor).
+Düzeltme:
+- `lib/main.dart`: `FirebaseAuth.instance.authStateChanges().listen(...)` ile her oturum açılışında (`_syncFcmToken`) token Firestore'daki değerle karşılaştırılıp farklıysa güncelleniyor; `FirebaseMessaging.instance.onTokenRefresh.listen(...)` ile token her yenilendiğinde anında Firestore'a yazılıyor.
+- `functions/index.js` (`onNotificationRequestCreated`): `error.code === "messaging/registration-token-not-registered"` durumunda ilgili kullanıcının `fcmToken` alanı otomatik siliniyor (`FieldValue.delete()`) — geçersiz token'lar veritabanında birikmiyor, bir sonraki senkronizasyonda taze token otomatik yazılıyor.
+- `caregiver_home_page.dart` → `_sendNudgeNotification`: catch bloğu artık gerçek hatayı da gösteriyor (`debugPrint` + kullanıcıya kırmızı SnackBar), önceden sessizce `print` ile yutuluyordu.
+
+### Not: test ortamı sınırlaması (gerçek bug değil)
+Aynı araştırma sürecinde ayrıca fark edildi: **duplicate edilmiş emülatörler Firebase Installations ID'sini (dolayısıyla FCM token'ı) paylaşabiliyor** — elder ve caregiver hesapları klonlanmış bir emülatörde test edilirse ikisi de aynı token'a sahip olur ve bildirim "yanlış yerde" (aynı cihazda) görünür/görünmez gibi kafa karıştırıcı sonuçlar verir. Bu bir kod hatası değildi. **İleride test edilirken emülatör "Duplicate" ile değil "Create Device" ile bağımsız oluşturulmalı**, ya da gerçek cihaz + tek emülatör kombinasyonu tercih edilmeli.

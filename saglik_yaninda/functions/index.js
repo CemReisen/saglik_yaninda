@@ -241,6 +241,28 @@ exports.onNotificationRequestCreated = onDocumentCreated(
       );
     } catch (error) {
       logger.error(`❌ Bildirim gönderilemedi [${type}] -> ${recipientId}:`, error);
+
+      // Token artık geçersizse (uygulama silinmiş, verisi temizlenmiş, token
+      // rotasyona uğramış vb.) veritabanında biriktirmemek için temizle —
+      // bir sonraki senkronizasyonda (main.dart _syncFcmToken/onTokenRefresh)
+      // geçerli token otomatik olarak tekrar yazılacak.
+      if (error.code === "messaging/registration-token-not-registered") {
+        try {
+          await admin
+            .firestore()
+            .collection("users")
+            .doc(recipientId)
+            .update({ fcmToken: admin.firestore.FieldValue.delete() });
+          logger.info(
+            `🧹 Geçersiz fcmToken temizlendi: ${recipientId}`
+          );
+        } catch (cleanupError) {
+          logger.error(
+            `fcmToken temizlenemedi: ${recipientId}:`,
+            cleanupError
+          );
+        }
+      }
     }
   }
 );

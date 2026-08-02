@@ -199,7 +199,15 @@ class CaregiverHomePage extends StatelessWidget {
         );
       }
     } catch (e) {
-      print("Dürtme hatası: $e");
+      debugPrint("⚠️ Dürtme bildirimi gönderilemedi: $e");
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Hatırlatma gönderilemedi: $e"),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
