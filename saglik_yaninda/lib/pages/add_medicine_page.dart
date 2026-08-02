@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -119,8 +121,48 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
 
   DateTimeRange? _dateRange;
 
+  // 🔥 cloud_firestore'un offline'da bir yazma Future'ını sunucu ACK'i
+  // gelene kadar tamamlamama davranışı yüzünden (bkz. home_page.dart),
+  // batch.commit()'i offline iken beklemeden devam etmek için bağlantı
+  // durumunu takip ediyoruz.
+  bool _isOffline = false;
+  StreamSubscription<dynamic>? _connectivitySubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkInitialConnectivity();
+    _connectivitySubscription = Connectivity().onConnectivityChanged.listen((
+      dynamic result,
+    ) {
+      if (mounted) {
+        setState(() {
+          if (result is List) {
+            _isOffline = result.contains(ConnectivityResult.none);
+          } else {
+            _isOffline = result == ConnectivityResult.none;
+          }
+        });
+      }
+    });
+  }
+
+  Future<void> _checkInitialConnectivity() async {
+    final result = await Connectivity().checkConnectivity();
+    if (mounted) {
+      setState(() {
+        if (result is List) {
+          _isOffline = result.contains(ConnectivityResult.none);
+        } else {
+          _isOffline = result == ConnectivityResult.none;
+        }
+      });
+    }
+  }
+
   @override
   void dispose() {
+    _connectivitySubscription?.cancel();
     _nameController.dispose();
     _nameFocusNode.dispose();
     _doseController.dispose();
@@ -259,6 +301,14 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
       ),
     );
 
+    // 🔥 Bu save akışında kurulan HER alarm id'si burada toplanıyor — bir
+    // dozun alarmı kurulduktan sonra başka bir dozda hata olursa ya da
+    // commit() gerçek bir sebeple (izin/kural reddi) başarısız olursa, bu
+    // listeyle o ana kadar kurulmuş tüm alarmları iptal edip "hayalet alarm"
+    // (Firestore'da kaydı olmayan ama cihazda çalmaya devam eden alarm)
+    // kalmasını önlüyoruz.
+    final List<int> allScheduledIds = [];
+
     try {
       WriteBatch batch = FirebaseFirestore.instance.batch();
 
@@ -308,6 +358,7 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
                 notificationType: _notificationType,
               );
               notificationIds.add(id);
+              allScheduledIds.add(id);
             } else {
               // "Belirli Günler": flutter_local_notifications haftalık tekrarı
               // tek bir çağrıda birden fazla gün için desteklemiyor —
@@ -331,6 +382,7 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
                   matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
                 );
                 notificationIds.add(id);
+                allScheduledIds.add(id);
               }
             }
           }
@@ -358,6 +410,40 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
         }
       }
 
+      final bool wasOffline = _isOffline;
+
+      if (wasOffline) {
+        // 🔥 cloud_firestore'un offline'da bir yazma Future'ını sunucu
+        // ACK'i gelene kadar tamamlamama davranışı yüzünden (bkz.
+        // home_page.dart'taki SOS/ilaç-alındı düzeltmesi), commit()'i
+        // beklemeden devam ediyoruz — alarmlar zaten kuruldu, doküman
+        // yerel kuyruğa senkron olarak düştü. Gerçek gönderim arka planda
+        // (fire-and-forget) devam ediyor; kalıcı bir hata olursa (örn.
+        // senkronizasyon sırasında bir kural reddederse) o alarmları
+        // arka planda iptal ediyoruz — kullanıcı ekrandan ayrılmış
+        // olacağı için bunu kendisine gösteremiyoruz, düşük ihtimalli
+        // kabul edilmiş bir risk (bkz. CLAUDE.md).
+        if (mounted) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                "İlaçlar kaydedildi, bağlantı sağlanınca senkronize edilecek. Hatırlatmalarınız kuruldu.",
+              ),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 4),
+            ),
+          );
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (context) => const MainLayout()),
+            (route) => false,
+          );
+        }
+        unawaited(_commitMedicineBatchInBackground(batch, allScheduledIds));
+        return;
+      }
+
       await batch.commit();
 
       if (mounted) {
@@ -375,11 +461,36 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
         );
       }
     } catch (e) {
+      // 🔥 Rollback: bu ana kadar kurulmuş tüm alarmları iptal et — ya hepsi
+      // (dokümanlar + alarmları) var olsun ya da hiçbiri, hayalet alarm
+      // kalmasın.
+      await NotificationService.cancelNotifications(allScheduledIds);
       if (mounted) Navigator.pop(context);
-      print("Hata Detayı: $e");
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("Hata: $e")));
+      debugPrint("Hata Detayı: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Hata: $e — kurulan hatırlatmalar geri alındı."),
+          ),
+        );
+      }
+    }
+  }
+
+  /// Offline'da başlatılan `batch.commit()`'i arka planda tamamlar. Yazma
+  /// zaten yerel kuyruğa düştüğü için burada beklemeye gerek yok; sadece
+  /// kalıcı bir hata (örn. senkronizasyon sırasında kural reddi) olursa bu
+  /// save akışında kurulan alarmları iptal ederek hayalet alarm kalmasını
+  /// önlüyoruz.
+  Future<void> _commitMedicineBatchInBackground(
+    WriteBatch batch,
+    List<int> scheduledIds,
+  ) async {
+    try {
+      await batch.commit();
+    } catch (e) {
+      debugPrint("İlaç kaydı senkronizasyon hatası (offline kuyruk): $e");
+      await NotificationService.cancelNotifications(scheduledIds);
     }
   }
 
