@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -28,6 +29,17 @@ class _HomePageState extends State<HomePage> {
   // 🔥 YENİ: Çevrimdışı durumu tutan değişken
   bool _isOffline = false;
 
+  // 🔥 YENİ: Onaylı yakın (caregiver) ilişkilerini sürekli dinleyip state'te
+  // tutuyoruz — SOS ve "ilaç alındı" bildirimleri artık tek seferlik bir
+  // .get() sorgusuna değil, bu cache'e bakıyor. Böylece cihaz offline'a
+  // düştüğünde bile (daha önce en az bir kez online'ken senkronize olduysa)
+  // caregiver listesi elde mevcut olur; aksi halde offline'daki tek seferlik
+  // .get() sorgusu cache boşsa sessizce başarısız olup bildirimi hiç
+  // kuyruğa almadan kaybediyordu.
+  List<QueryDocumentSnapshot> _approvedCaregiverRelations = [];
+  bool _relationsLoaded = false;
+  StreamSubscription<QuerySnapshot>? _relationsSubscription;
+
   @override
   void initState() {
     super.initState();
@@ -41,6 +53,19 @@ class _HomePageState extends State<HomePage> {
           .doc(user!.uid)
           .collection('medicines')
           .snapshots();
+      _relationsSubscription = FirebaseFirestore.instance
+          .collection('relations')
+          .where('elderId', isEqualTo: user!.uid)
+          .where('status', isEqualTo: 'approved')
+          .snapshots()
+          .listen((snapshot) {
+            if (mounted) {
+              setState(() {
+                _approvedCaregiverRelations = snapshot.docs;
+                _relationsLoaded = true;
+              });
+            }
+          });
     }
 
     // 🔥 YENİ: Uygulama açılır açılmaz interneti kontrol et
@@ -122,18 +147,11 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _sendPushNotificationToCaregiver(String medicineName) async {
-    // Çevrimdışıyken boşuna istek atıp uygulamayı kastırma
-    if (_isOffline) return;
+    // 🔥 relations artık .snapshots() ile canlı dinleniyor (bkz. initState) —
+    // offline'da bile son bilinen onaylı yakın listesi burada mevcut.
+    if (_approvedCaregiverRelations.isEmpty) return;
 
     try {
-      var relations = await FirebaseFirestore.instance
-          .collection('relations')
-          .where('elderId', isEqualTo: user!.uid)
-          .where('status', isEqualTo: 'approved')
-          .get();
-
-      if (relations.docs.isEmpty) return;
-
       String elderName = "Yakınınız";
       var elderDoc = await FirebaseFirestore.instance
           .collection('users')
@@ -146,8 +164,12 @@ class _HomePageState extends State<HomePage> {
         }
       }
 
-      for (var doc in relations.docs) {
+      for (var doc in _approvedCaregiverRelations) {
         String caregiverId = doc['caregiverId'];
+        // 🔥 Bu Firestore .add() çağrısı offline'da lokal kuyruğa alınır ve
+        // bağlantı geri geldiğinde otomatik senkronize olur — internet
+        // gerektiren kısım (push bildirimi) senkronizasyondan sonra
+        // Cloud Function tarafından tetiklenir.
         await FirebaseFirestore.instance
             .collection('notification_requests')
             .add({
@@ -161,70 +183,94 @@ class _HomePageState extends State<HomePage> {
             });
       }
     } catch (e) {
-      print("Bildirim isteği gönderme hatası: $e");
+      debugPrint("Bildirim isteği gönderme hatası: $e");
+    }
+  }
+
+  /// `notification_requests`'e SOS kayıtlarını yazar. Bu Future, cihaz
+  /// offline'dayken **sunucu ACK'i gelene kadar tamamlanmaz** (cloud_firestore
+  /// native SDK davranışı — yazma yerel kuyruğa senkron olarak düşer ama
+  /// döndürülen Future ancak bağlantı geri gelip yazma sunucuya ulaşınca
+  /// resolve olur). Bu yüzden çağıran taraf, offline'da bu Future'ı UI geri
+  /// bildirimi için beklememeli.
+  Future<void> _writeSOSNotifications() async {
+    String elderName = "Yakınınız";
+    var elderDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user!.uid)
+        .get();
+    if (elderDoc.exists && elderDoc.data() != null) {
+      String? dbName = elderDoc.data()!['name'];
+      if (dbName != null && dbName.trim().isNotEmpty) elderName = dbName;
+    }
+
+    for (var doc in _approvedCaregiverRelations) {
+      String caregiverId = doc['caregiverId'];
+      await FirebaseFirestore.instance.collection('notification_requests').add({
+        'type': 'sos',
+        'caregiverId': caregiverId,
+        'elderId': user!.uid,
+        'elderName': elderName,
+        'callerName': elderName,
+        'medicineName': '',
+        'timestamp': FieldValue.serverTimestamp(),
+      });
     }
   }
 
   Future<void> _sendSOSNotificationToCaregiver() async {
-    if (_isOffline) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            "🚨 İnternetiniz yok! Çağrı gönderilemedi. Lütfen normal yollarla aramayı deneyin.",
+    // 🔥 relations artık .snapshots() ile canlı dinleniyor (bkz. initState) —
+    // offline'da bile son bilinen onaylı yakın listesi burada mevcut, tek
+    // seferlik .get() sorgusunun cache boşken sessizce başarısız olma riski
+    // yok.
+    if (_approvedCaregiverRelations.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              !_relationsLoaded
+                  ? "Yakın bilgileriniz henüz yüklenemedi. Lütfen bağlantınızı kontrol edip tekrar deneyin, çok acilse doğrudan arayın."
+                  : "Kayıtlı bir yakınınız bulunamadı! Lütfen önce bir yakın ekleyin.",
+            ),
+            backgroundColor: Colors.redAccent,
           ),
-          backgroundColor: Colors.redAccent,
-          duration: Duration(seconds: 4),
-        ),
+        );
+      }
+      return;
+    }
+
+    final bool wasOffline = _isOffline;
+
+    if (wasOffline) {
+      // 🔥 Yazmanın sunucuya ulaşmasını (dolayısıyla Future'ın dönmesini)
+      // beklemeden hemen bilgilendiriyoruz — yazma zaten bu noktada yerel
+      // kuyruğa senkron olarak düştü. Gerçek gönderim arka planda
+      // (fire-and-forget) devam ediyor; sonucunu UI'a yansıtmıyoruz, sadece
+      // hata olursa loglanıyor. Bilinen risk: bağlantı hiç gelmezse ya da
+      // senkronizasyon sırasında bir kural reddederse kullanıcı bunu asla
+      // öğrenemez — kapsam dışı, ileride "gönderilemeyen SOS'lar" için ayrı
+      // bir kontrol mekanizması gerekebilir.
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              "🚨 SOS kaydedildi, bağlantı sağlanınca yakınlarınıza iletilecek. Acil bir durumsa lütfen doğrudan arayın.",
+            ),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
+      unawaited(
+        _writeSOSNotifications().catchError((e) {
+          debugPrint("SOS bildirim gönderme hatası (offline kuyruk): $e");
+        }),
       );
       return;
     }
 
     try {
-      var relations = await FirebaseFirestore.instance
-          .collection('relations')
-          .where('elderId', isEqualTo: user!.uid)
-          .where('status', isEqualTo: 'approved')
-          .get();
-
-      if (relations.docs.isEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                "Kayıtlı bir yakınınız bulunamadı! Lütfen önce bir yakın ekleyin.",
-              ),
-              backgroundColor: Colors.redAccent,
-            ),
-          );
-        }
-        return;
-      }
-
-      String elderName = "Yakınınız";
-      var elderDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user!.uid)
-          .get();
-      if (elderDoc.exists && elderDoc.data() != null) {
-        String? dbName = elderDoc.data()!['name'];
-        if (dbName != null && dbName.trim().isNotEmpty) elderName = dbName;
-      }
-
-      for (var doc in relations.docs) {
-        String caregiverId = doc['caregiverId'];
-        await FirebaseFirestore.instance
-            .collection('notification_requests')
-            .add({
-              'type': 'sos',
-              'caregiverId': caregiverId,
-              'elderId': user!.uid,
-              'elderName': elderName,
-              'callerName': elderName,
-              'medicineName': '',
-              'timestamp': FieldValue.serverTimestamp(),
-            });
-      }
-
+      await _writeSOSNotifications();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -235,7 +281,18 @@ class _HomePageState extends State<HomePage> {
         );
       }
     } catch (e) {
-      print("SOS bildirim gönderme hatası: $e");
+      debugPrint("SOS bildirim gönderme hatası: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              "SOS gönderilirken bir sorun oluştu. Lütfen tekrar deneyin ya da doğrudan arayın.",
+            ),
+            backgroundColor: Colors.redAccent,
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
     }
   }
 
@@ -293,30 +350,15 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Future<void> _toggleTaken(
-    String docId,
-    String medicineName,
+  /// `lastTakenDate` ve `totalScore`'u günceller. Bu Future de SOS
+  /// yazmalarıyla aynı sebepten (bkz. `_writeSOSNotifications`) offline'da
+  /// sunucu ACK'i gelene kadar tamamlanmaz.
+  Future<void> _applyMedicineTakenWrites(
+    DocumentReference<Map<String, dynamic>> medRef,
+    DocumentReference<Map<String, dynamic>> userRef,
     bool currentStatus,
     String today,
   ) async {
-    // Çevrimdışıyken işlemi durdur ve uyarı ver
-    if (_isOffline) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            "İnternet bağlantınız koptu. İşlem çevrimdışıyken yapılamaz.",
-          ),
-          backgroundColor: Colors.orange,
-        ),
-      );
-      return;
-    }
-
-    final userRef = FirebaseFirestore.instance
-        .collection('users')
-        .doc(user!.uid);
-    final medRef = userRef.collection('medicines').doc(docId);
-
     if (currentStatus) {
       await medRef.update({'lastTakenDate': ""});
       await userRef.set({
@@ -327,17 +369,79 @@ class _HomePageState extends State<HomePage> {
       await userRef.set({
         'totalScore': FieldValue.increment(100),
       }, SetOptions(merge: true));
-      await _sendPushNotificationToCaregiver(medicineName);
+    }
+  }
+
+  Future<void> _toggleTaken(
+    String docId,
+    String medicineName,
+    bool currentStatus,
+    String today,
+  ) async {
+    final userRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(user!.uid);
+    final medRef = userRef.collection('medicines').doc(docId);
+    final bool wasOffline = _isOffline;
+    final Future<void> writeFuture = _applyMedicineTakenWrites(
+      medRef,
+      userRef,
+      currentStatus,
+      today,
+    );
+
+    if (currentStatus) {
+      // "Alındı" işaretini geri alma — online'da olduğu gibi sessiz, sadece
+      // offline'da UI'ı bloklamıyoruz.
+      if (wasOffline) {
+        unawaited(
+          writeFuture.catchError((e) {
+            debugPrint("İlaç durumu geri alma hatası (offline kuyruk): $e");
+          }),
+        );
+      } else {
+        await writeFuture;
+      }
+      return;
+    }
+
+    if (wasOffline) {
+      // 🔥 Yazmanın sunucuya ulaşmasını beklemeden hemen bilgilendiriyoruz —
+      // yazma zaten yerel kuyruğa senkron olarak düştü. Puan güncellemesi ve
+      // caregiver bildirimi arka planda (fire-and-forget) devam ediyor;
+      // sonucunu UI'a yansıtmıyoruz, sadece hata olursa loglanıyor.
+      unawaited(
+        writeFuture.catchError((e) {
+          debugPrint("İlaç alındı işaretleme hatası (offline kuyruk): $e");
+        }),
+      );
+      unawaited(_sendPushNotificationToCaregiver(medicineName));
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text("Harika! 100 Sağlık Puanı Kazandın."),
-            backgroundColor: Color(0xFF4DB6AC),
-            duration: Duration(seconds: 1),
+            content: Text(
+              "Kaydedildi! Bağlantı sağlanınca 100 Sağlık Puanı eklenecek ve yakınınıza bildirilecek.",
+            ),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 3),
           ),
         );
       }
+      return;
+    }
+
+    await writeFuture;
+    await _sendPushNotificationToCaregiver(medicineName);
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Harika! 100 Sağlık Puanı Kazandın."),
+          backgroundColor: Color(0xFF4DB6AC),
+          duration: Duration(seconds: 1),
+        ),
+      );
     }
   }
 
@@ -403,15 +507,6 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _deleteMedicine(String docId, List<int> notificationIds) async {
-    if (_isOffline) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Çevrimdışıyken ilaç silemezsiniz."),
-          backgroundColor: Colors.orange,
-        ),
-      );
-      return;
-    }
     try {
       await NotificationService.cancelNotifications(notificationIds);
       await FirebaseFirestore.instance
@@ -621,16 +716,6 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
               onPressed: () async {
-                if (_isOffline) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text("Çevrimdışıyken düzenleme yapılamaz."),
-                      backgroundColor: Colors.orange,
-                    ),
-                  );
-                  return;
-                }
-
                 // 🔥 Saat değiştiyse eski OS alarmları hâlâ eski saatte
                 // çalar — önce eskilerini iptal edip, tamamlandığından emin
                 // olduktan SONRA yenilerini kuruyoruz. Aksi halde yeni
@@ -1784,6 +1869,12 @@ class _HomePageState extends State<HomePage> {
         ),
       ],
     );
+  }
+
+  @override
+  void dispose() {
+    _relationsSubscription?.cancel();
+    super.dispose();
   }
 }
 
