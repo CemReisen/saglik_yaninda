@@ -483,8 +483,23 @@ class _HomePageState extends State<HomePage> {
     final List<String> days =
         (data['days'] as List?)?.whereType<String>().toList() ?? [];
     final String? lastTakenDate = data['lastTakenDate'] as String?;
+    // 🔥 Bug fix: isScheduledDay eskiden sadece repeatType/days'e bakıyordu,
+    // ilacın startDate'ini hiç kontrol etmiyordu. Yeni eklenen (startDate =
+    // bugün), henüz vakti gelmemiş bir ilaçta, geriye doğru tarama "dün"e
+    // bakıyor, "Her Gün" olduğu için onu da "planlı" sayıyor, ama o gün
+    // ilaç henüz yokken elbette hiç alınmamış - sonuç olarak yanlışlıkla
+    // büyük bir pozitif gecikme üretip Ertele'yi gizliyordu (regresyon).
+    // startDate/endDate kontrolü, todaysMedicines'taki filtreyle aynı
+    // desen: sadece ikisi de parse edilebiliyorsa uygulanıyor.
+    final DateTime? startDate = _parseDate(data['startDate'] ?? '');
+    final DateTime? endDate = _parseDate(data['endDate'] ?? '');
 
     bool isScheduledDay(DateTime day) {
+      if (startDate != null &&
+          endDate != null &&
+          (day.isBefore(startDate) || day.isAfter(endDate))) {
+        return false;
+      }
       if (repeatType == 'daily' || repeatType == 'Her Gün') return true;
       return days.contains(NotificationService.weekDays[day.weekday - 1]);
     }
