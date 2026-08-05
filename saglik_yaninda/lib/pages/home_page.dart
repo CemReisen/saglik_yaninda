@@ -983,7 +983,7 @@ class _HomePageState extends State<HomePage> {
     if (nextMed == null || docId == null) {
       return Container(
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
           gradient: const LinearGradient(
             colors: [Color(0xFF26A69A), Color(0xFF00897B)],
@@ -1002,19 +1002,19 @@ class _HomePageState extends State<HomePage> {
         child: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(10),
+              padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(0.2),
                 shape: BoxShape.circle,
               ),
-              child: const Text("🎉", style: TextStyle(fontSize: 22)),
+              child: const Text("🎉", style: TextStyle(fontSize: 20)),
             ),
             const SizedBox(width: 14),
             Expanded(
               child: Text(
                 "Bugünkü tüm ilaçlarını aldın!",
                 style: GoogleFonts.poppins(
-                  fontSize: 19,
+                  fontSize: 17,
                   fontWeight: FontWeight.bold,
                   color: Colors.white,
                 ),
@@ -1033,7 +1033,7 @@ class _HomePageState extends State<HomePage> {
       borderRadius: BorderRadius.circular(18),
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
           gradient: const LinearGradient(
             colors: [Color(0xFF26A69A), Color(0xFF00897B)],
@@ -1052,12 +1052,12 @@ class _HomePageState extends State<HomePage> {
         child: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(10),
+              padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(0.2),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.alarm, color: Colors.white, size: 24),
+              child: const Icon(Icons.alarm, color: Colors.white, size: 22),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -1068,7 +1068,7 @@ class _HomePageState extends State<HomePage> {
                   Text(
                     "Sıradaki",
                     style: GoogleFonts.poppins(
-                      fontSize: 14,
+                      fontSize: 13,
                       fontWeight: FontWeight.w600,
                       color: Colors.white70,
                     ),
@@ -1077,7 +1077,7 @@ class _HomePageState extends State<HomePage> {
                   Text(
                     "$formattedTime - ${nextMed['name'] ?? ''}",
                     style: GoogleFonts.poppins(
-                      fontSize: 20,
+                      fontSize: 18,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
                     ),
@@ -1088,7 +1088,7 @@ class _HomePageState extends State<HomePage> {
                     "${nextMed['dose'] ?? ''}",
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 16,
+                      fontSize: 15,
                       fontWeight: FontWeight.w500,
                     ),
                     maxLines: 1,
