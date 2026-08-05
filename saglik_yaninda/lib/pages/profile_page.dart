@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:saglik_yaninda/core/theme/app_colors.dart';
 
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});
@@ -457,7 +458,7 @@ class ProfilePage extends StatelessWidget {
           Text(
             email,
             style: GoogleFonts.poppins(
-              fontSize: 14,
+              fontSize: 16,
               color: Colors.white.withOpacity(0.8),
               fontWeight: FontWeight.w400,
             ),
@@ -503,16 +504,16 @@ class ProfilePage extends StatelessWidget {
                 children: [
                   Text(
                     label,
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: Colors.grey[500],
+                    style: const TextStyle(
+                      fontSize: 16,
+                      color: AppColors.textSecondaryStrong,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
                   Text(
                     value,
                     style: const TextStyle(
-                      fontSize: 13,
+                      fontSize: 18,
                       fontWeight: FontWeight.bold,
                     ),
                     overflow: TextOverflow.ellipsis,
@@ -722,7 +723,7 @@ class ProfilePage extends StatelessWidget {
               Text(
                 "Aile Bağlantı Kodum",
                 style: GoogleFonts.poppins(
-                  fontSize: 12,
+                  fontSize: 16,
                   color: const Color(0xFF00796B),
                   fontWeight: FontWeight.w600,
                 ),
