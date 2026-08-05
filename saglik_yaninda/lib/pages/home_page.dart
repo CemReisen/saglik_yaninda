@@ -443,29 +443,30 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  /// Bugünün henüz alınmamış ilaçları arasından saati en yakın olanı döner.
+  /// Bilinçli olarak "şu andan sonraki" ile sınırlamıyoruz: saati geçmiş ama
+  /// hâlâ işaretlenmemiş (gecikmiş) bir ilaç, eskiden bu filtreden sessizce
+  /// düşüp "sıradaki" kartından kayboluyordu — oysa gecikmiş bir doz, henüz
+  /// vakti gelmemiş bir dozdan daha acil gösterilmeyi hak ediyor.
   QueryDocumentSnapshot? _getNextMedicine(
     List<QueryDocumentSnapshot> medicines,
     String today,
   ) {
-    if (medicines.isEmpty) return null;
-    final now = DateTime.now();
-    final currentMinutes = now.hour * 60 + now.minute;
-    List<QueryDocumentSnapshot> futureMeds = [];
-    for (var doc in medicines) {
-      var data = doc.data() as Map<String, dynamic>;
-      if (data['lastTakenDate'] == today) continue;
-      int medMinutes = (data['hour'] ?? 0) * 60 + (data['minute'] ?? 0);
-      if (medMinutes > currentMinutes) futureMeds.add(doc);
-    }
-    if (futureMeds.isEmpty) return null;
-    futureMeds.sort((a, b) {
+    final untaken = medicines
+        .where(
+          (doc) =>
+              (doc.data() as Map<String, dynamic>)['lastTakenDate'] != today,
+        )
+        .toList();
+    if (untaken.isEmpty) return null;
+    untaken.sort((a, b) {
       var dataA = a.data() as Map<String, dynamic>;
       var dataB = b.data() as Map<String, dynamic>;
       return ((dataA['hour'] as int) * 60 + (dataA['minute'] as int)).compareTo(
         (dataB['hour'] as int) * 60 + (dataB['minute'] as int),
       );
     });
-    return futureMeds.first;
+    return untaken.first;
   }
 
   void _showDeleteConfirmDialog(String docId, List<int> notificationIds) {
@@ -1260,89 +1261,33 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildProgressCard(int total, int taken) {
-    if (total == 0) return const SizedBox();
-    double progress = taken / total;
-    int percentage = (progress * 100).toInt();
+  /// Ana ekranın en dikkat çekici alanı: bugünün henüz alınmamış ilaçları
+  /// arasından saati en yakın olanı (bkz. _getNextMedicine) büyük, teal
+  /// gradyanlı bir kartta öne çıkarır. Eskiden burada soyut bir "Günlük
+  /// İlaç Tamamlama %X" ilerleme çubuğu vardı — yaşlı kullanıcı için somut
+  /// bir bilgi taşımıyordu, kaldırıldı.
+  ///
+  /// totalCount == 0: bugün hiç ilaç yok, kart tamamen gizli.
+  /// nextMed == null (ama totalCount > 0): bugünün tüm ilaçları alınmış,
+  /// tebrik mesajı gösterilir.
+  Widget _buildNextDoseCard(
+    Map<String, dynamic>? nextMed,
+    String? docId,
+    int totalCount,
+  ) {
+    if (totalCount == 0) return const SizedBox();
 
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: const Color(0xFF4DB6AC).withOpacity(0.2)),
-      ),
-      child: Row(
-        children: [
-          const Icon(
-            Icons.check_circle_outline,
-            color: Color(0xFF4DB6AC),
-            size: 20,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      "Günlük İlaç Tamamlama",
-                      style: GoogleFonts.poppins(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    Text(
-                      "%$percentage",
-                      style: GoogleFonts.poppins(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: const Color(0xFF4DB6AC),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: LinearProgressIndicator(
-                    value: progress,
-                    minHeight: 6,
-                    backgroundColor: Colors.grey[200],
-                    valueColor: const AlwaysStoppedAnimation<Color>(
-                      Color(0xFF4DB6AC),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNextDoseCard(Map<String, dynamic>? nextMed, String? docId) {
-    if (nextMed == null || docId == null) return const SizedBox();
-    String formattedTime =
-        "${nextMed['hour'].toString().padLeft(2, '0')}:${nextMed['minute'].toString().padLeft(2, '0')}";
-
-    return InkWell(
-      onTap: () => _showMedicineDetails(nextMed, docId),
-      borderRadius: BorderRadius.circular(15),
-      child: Container(
+    if (nextMed == null || docId == null) {
+      return Container(
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
         decoration: BoxDecoration(
           gradient: const LinearGradient(
             colors: [Color(0xFF26A69A), Color(0xFF00897B)],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
-          borderRadius: BorderRadius.circular(15),
+          borderRadius: BorderRadius.circular(18),
           boxShadow: [
             BoxShadow(
               color: const Color(0xFF00897B).withOpacity(0.3),
@@ -1354,51 +1299,97 @@ class _HomePageState extends State<HomePage> {
         child: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(0.2),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.alarm, color: Colors.white, size: 20),
+              child: const Text("🎉", style: TextStyle(fontSize: 22)),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                "Bugünkü tüm ilaçlarını aldın!",
+                style: GoogleFonts.poppins(
+                  fontSize: 19,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    String formattedTime =
+        "${nextMed['hour'].toString().padLeft(2, '0')}:${nextMed['minute'].toString().padLeft(2, '0')}";
+
+    return InkWell(
+      onTap: () => _showMedicineDetails(nextMed, docId),
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF26A69A), Color(0xFF00897B)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF00897B).withOpacity(0.3),
+              blurRadius: 6,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.alarm, color: Colors.white, size: 24),
+            ),
+            const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Row(
-                    children: [
-                      Text(
-                        "Sıradaki: ",
-                        style: GoogleFonts.poppins(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.white70,
-                        ),
-                      ),
-                      Expanded(
-                        child: Text(
-                          nextMed['name'] ?? '',
-                          style: GoogleFonts.poppins(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
+                  Text(
+                    "Sıradaki",
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white70,
+                    ),
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    "Saat $formattedTime • ${nextMed['dose']}",
+                    "$formattedTime - ${nextMed['name'] ?? ''}",
+                    style: GoogleFonts.poppins(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    "${nextMed['dose'] ?? ''}",
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
@@ -1508,24 +1499,16 @@ class _HomePageState extends State<HomePage> {
                   });
 
                   int totalCount = todaysMedicines.length;
-                  int takenCount = todaysMedicines
-                      .where(
-                        (doc) =>
-                            (doc.data()
-                                as Map<String, dynamic>)['lastTakenDate'] ==
-                            today,
-                      )
-                      .length;
                   var nextMedDoc = _getNextMedicine(todaysMedicines, today);
 
                   return Column(
                     children: [
                       _buildHeader(firstName),
                       _buildSOSButton(),
-                      _buildProgressCard(totalCount, takenCount),
                       _buildNextDoseCard(
                         nextMedDoc?.data() as Map<String, dynamic>?,
                         nextMedDoc?.id,
+                        totalCount,
                       ),
                       const SizedBox(height: 4),
 
