@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:intl/intl.dart';
 import 'package:shimmer/shimmer.dart'; // 🔥 EFSANE ANİMASYON PAKETİ EKLENDİ
+import 'package:saglik_yaninda/core/theme/app_colors.dart';
 
 class CaregiverLayout extends StatefulWidget {
   const CaregiverLayout({super.key});
@@ -226,9 +227,11 @@ class CaregiverHomePage extends StatelessWidget {
             child: Text(
               medName,
               style: GoogleFonts.poppins(
-                fontSize: 14,
+                fontSize: 16,
                 fontWeight: isTaken ? FontWeight.w500 : FontWeight.w600,
-                color: isTaken ? Colors.grey.shade500 : const Color(0xFF263238),
+                color: isTaken
+                    ? AppColors.textSecondaryStrong
+                    : const Color(0xFF263238),
                 decoration: isTaken ? TextDecoration.lineThrough : null,
               ),
               maxLines: 1,
@@ -238,9 +241,11 @@ class CaregiverHomePage extends StatelessWidget {
           Text(
             medTime,
             style: GoogleFonts.poppins(
-              fontSize: 12,
+              fontSize: 16,
               fontWeight: FontWeight.bold,
-              color: isTaken ? Colors.grey.shade400 : const Color(0xFF3949AB),
+              color: isTaken
+                  ? AppColors.textSecondaryStrong
+                  : const Color(0xFF3949AB),
             ),
           ),
         ],
@@ -414,7 +419,7 @@ class CaregiverHomePage extends StatelessWidget {
                             style: GoogleFonts.poppins(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
-                              fontSize: 13,
+                              fontSize: 16,
                             ),
                           ),
                         ],
@@ -456,8 +461,8 @@ class CaregiverHomePage extends StatelessWidget {
                             Text(
                               "Henüz takip ettiğiniz biri yok.",
                               style: GoogleFonts.poppins(
-                                color: Colors.grey[500],
-                                fontSize: 15,
+                                color: AppColors.textSecondaryStrong,
+                                fontSize: 16,
                               ),
                             ),
                           ],
@@ -612,9 +617,9 @@ class CaregiverHomePage extends StatelessWidget {
                                 Text(
                                   "$score Puan",
                                   style: GoogleFonts.poppins(
-                                    fontSize: 12,
+                                    fontSize: 16,
                                     fontWeight: FontWeight.w600,
-                                    color: Colors.grey.shade600,
+                                    color: AppColors.textSecondaryStrong,
                                   ),
                                 ),
                               ],
@@ -661,9 +666,9 @@ class CaregiverHomePage extends StatelessWidget {
                                 Text(
                                   "Bugün ($takenMeds/$totalMeds)",
                                   style: GoogleFonts.poppins(
-                                    fontSize: 12,
+                                    fontSize: 16,
                                     fontWeight: FontWeight.w600,
-                                    color: Colors.grey.shade700,
+                                    color: AppColors.textSecondaryStrong,
                                   ),
                                 ),
                               ],
@@ -779,7 +784,10 @@ class CaregiverHomePage extends StatelessWidget {
                 children: [
                   Text(
                     "Takip etmek istediğiniz kişinin profilinde yazan 6 haneli kodu giriniz.",
-                    style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: AppColors.textSecondaryStrong,
+                    ),
                   ),
                   const SizedBox(height: 16),
                   TextField(
@@ -1022,8 +1030,8 @@ class CaregiverProfilePage extends StatelessWidget {
               Text(
                 currentUser.email ?? "",
                 style: GoogleFonts.poppins(
-                  fontSize: 14,
-                  color: Colors.grey[600],
+                  fontSize: 16,
+                  color: AppColors.textSecondaryStrong,
                 ),
               ),
               const SizedBox(height: 40),
@@ -1081,8 +1089,8 @@ class CaregiverProfilePage extends StatelessWidget {
                         "Henüz kimseyi takip etmiyorsunuz.",
                         textAlign: TextAlign.center,
                         style: GoogleFonts.poppins(
-                          color: Colors.grey[600],
-                          fontSize: 13,
+                          color: AppColors.textSecondaryStrong,
+                          fontSize: 16,
                         ),
                       ),
                     );
@@ -1139,8 +1147,8 @@ class CaregiverProfilePage extends StatelessWidget {
                               subtitle: Text(
                                 "Takipte",
                                 style: TextStyle(
-                                  color: Colors.green[600],
-                                  fontSize: 12,
+                                  color: Colors.green[700],
+                                  fontSize: 15,
                                 ),
                               ),
                               trailing: IconButton(
