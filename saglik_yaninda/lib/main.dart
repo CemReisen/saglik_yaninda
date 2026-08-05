@@ -19,6 +19,7 @@ import 'package:saglik_yaninda/pages/auth/register_page.dart';
 import 'package:saglik_yaninda/services/notification_service.dart';
 import 'package:saglik_yaninda/pages/caregiver/caregiver_home_page.dart';
 import 'core/theme/app_theme.dart';
+import 'core/theme/app_colors.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -298,9 +299,9 @@ class _MainLayoutState extends State<MainLayout> {
                 right: 16,
                 top: 8,
               ),
-              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
               decoration: BoxDecoration(
-                color: const Color(0xFFF1F3F4),
+                color: AppColors.navbarBg,
                 borderRadius: BorderRadius.circular(24),
                 boxShadow: [
                   BoxShadow(
@@ -322,15 +323,27 @@ class _MainLayoutState extends State<MainLayout> {
                     'assets/icons/notification.svg',
                     'assets/icons/profile.svg',
                   ];
+                  // Her ikonun altındaki kısa etiket — ikon anlamı zaten
+                  // taşıdığı için etiket sadece teyit/hatırlatma görevi
+                  // görüyor, bu yüzden genel "ikincil metin ≥16sp" hedefinin
+                  // istisnası: 13sp, kalın. İkon boyutu (aşağıda) değişmedi.
+                  const labels = [
+                    'Ana Sayfa',
+                    'Takvim',
+                    'Ekle',
+                    'Bildirimler',
+                    'Profil',
+                  ];
+
+                  // Etiket ve ikon aynı seçili/seçili-değil rengini paylaşır.
+                  Color labelColor = isSelected
+                      ? Colors.black
+                      : AppColors.navbarInactive;
 
                   Widget baseIcon = SvgPicture.asset(
                     iconPaths[index],
                     colorFilter: ColorFilter.mode(
-                      isAddButton
-                          ? Colors.white
-                          : (isSelected
-                                ? Colors.black
-                                : const Color(0xFF9E9E9E)),
+                      isAddButton ? Colors.white : labelColor,
                       BlendMode.srcIn,
                     ),
                     width: isAddButton ? 34 : 28,
@@ -385,42 +398,67 @@ class _MainLayoutState extends State<MainLayout> {
                     );
                   }
 
+                  // GestureDetector ikon+etiketin ikisini birden sarar —
+                  // dokunma alanı büyür (yaşlı kullanıcı için daha kolay
+                  // hedeflenir), etiketin de sekmeyi seçmesi sağlanır.
                   return GestureDetector(
                     onTap: () => setState(() => _currentIndex = index),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 250),
-                      width: isAddButton ? 60 : 54,
-                      height: isAddButton ? 60 : 54,
-                      decoration: BoxDecoration(
-                        color: isAddButton
-                            ? const Color(0xFF4DB6AC)
-                            : (isSelected ? Colors.white : Colors.transparent),
-                        shape: isAddButton
-                            ? BoxShape.circle
-                            : BoxShape.rectangle,
-                        borderRadius: isAddButton
-                            ? null
-                            : BorderRadius.circular(16),
-                        boxShadow: isSelected && !isAddButton
-                            ? [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.05),
-                                  blurRadius: 4,
-                                ),
-                              ]
-                            : (isAddButton
-                                  ? [
-                                      BoxShadow(
-                                        color: const Color(
-                                          0xFF4DB6AC,
-                                        ).withOpacity(0.3),
-                                        blurRadius: 8,
-                                        offset: const Offset(0, 4),
-                                      ),
-                                    ]
-                                  : []),
-                      ),
-                      child: Center(child: finalIcon),
+                    behavior: HitTestBehavior.opaque,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 250),
+                          width: isAddButton ? 60 : 54,
+                          height: isAddButton ? 60 : 54,
+                          decoration: BoxDecoration(
+                            color: isAddButton
+                                ? AppColors.primary
+                                : (isSelected
+                                      ? Colors.white
+                                      : Colors.transparent),
+                            shape: isAddButton
+                                ? BoxShape.circle
+                                : BoxShape.rectangle,
+                            borderRadius: isAddButton
+                                ? null
+                                : BorderRadius.circular(16),
+                            boxShadow: isSelected && !isAddButton
+                                ? [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.05),
+                                      blurRadius: 4,
+                                    ),
+                                  ]
+                                : (isAddButton
+                                      ? [
+                                          BoxShadow(
+                                            color: AppColors.primary
+                                                .withOpacity(0.3),
+                                            blurRadius: 8,
+                                            offset: const Offset(0, 4),
+                                          ),
+                                        ]
+                                      : []),
+                          ),
+                          child: Center(child: finalIcon),
+                        ),
+                        const SizedBox(height: 3),
+                        SizedBox(
+                          width: 68,
+                          child: Text(
+                            labels[index],
+                            textAlign: TextAlign.center,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.nunito(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: labelColor,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   );
                 }),
