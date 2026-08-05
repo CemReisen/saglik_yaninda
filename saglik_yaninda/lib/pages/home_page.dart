@@ -736,8 +736,7 @@ class _HomePageState extends State<HomePage> {
                     data['notificationType'] ?? "Standart";
                 final String repeatType = data['repeatType'] ?? "daily";
                 final List<String> days =
-                    (data['days'] as List?)?.whereType<String>().toList() ??
-                    [];
+                    (data['days'] as List?)?.whereType<String>().toList() ?? [];
                 final DateTime? endDate = NotificationService.parseDdMmYyyy(
                   data['endDate'] as String?,
                 );
@@ -779,8 +778,9 @@ class _HomePageState extends State<HomePage> {
                     newNotificationIds.add(id);
                   } else {
                     for (final dayName in days) {
-                      final int dayIndex = NotificationService.weekDays
-                          .indexOf(dayName);
+                      final int dayIndex = NotificationService.weekDays.indexOf(
+                        dayName,
+                      );
                       if (dayIndex == -1) continue;
                       final int id = await NotificationService.generateUniqueId(
                         exclude: newNotificationIds,
@@ -1047,7 +1047,10 @@ class _HomePageState extends State<HomePage> {
       const SizedBox(width: 8),
       Text(
         "$label ",
-        style: const TextStyle(color: AppColors.textSecondaryStrong, fontSize: 16),
+        style: const TextStyle(
+          color: AppColors.textSecondaryStrong,
+          fontSize: 16,
+        ),
       ),
       Expanded(
         child: Text(
@@ -1777,9 +1780,8 @@ class _HomePageState extends State<HomePage> {
                                                                 // metin grey.shade100 kart zemininde neredeyse
                                                                 // okunmuyordu (kontrast < 2:1). textSecondaryStrong
                                                                 // hem beyaz hem grey.shade100 zeminde ~5:1+ verir.
-                                                                color:
-                                                                    AppColors
-                                                                        .textSecondaryStrong,
+                                                                color: AppColors
+                                                                    .textSecondaryStrong,
                                                               ),
                                                               maxLines: 1,
                                                               overflow:
@@ -1789,30 +1791,100 @@ class _HomePageState extends State<HomePage> {
                                                           ],
                                                         ),
                                                       ),
-                                                      IconButton(
-                                                        onPressed: () =>
-                                                            _toggleTaken(
-                                                              medicine.id,
-                                                              medName,
-                                                              isTakenToday,
-                                                              today,
+                                                      if (isTakenToday)
+                                                        // İlaç zaten alınmış: mevcut davranış korunuyor -
+                                                        // kompakt yeşil check ikonu, tekrar dokununca
+                                                        // "alınmadı"ya geri alınabiliyor (_toggleTaken iki
+                                                        // yönlü çalışıyor).
+                                                        IconButton(
+                                                          onPressed: () =>
+                                                              _toggleTaken(
+                                                                medicine.id,
+                                                                medName,
+                                                                isTakenToday,
+                                                                today,
+                                                              ),
+                                                          icon: const Icon(
+                                                            Icons.check_circle,
+                                                            color: Colors.green,
+                                                            size: 28,
+                                                          ),
+                                                          padding:
+                                                              EdgeInsets.zero,
+                                                          constraints:
+                                                              const BoxConstraints(),
+                                                        )
+                                                      else
+                                                        // Alınmamış durum: eskiden belirsiz bir zil
+                                                        // ikonuydu (ne anlama geldiği net değildi) -
+                                                        // artık ikon + "İçtim" yazılı, hap şeklinde
+                                                        // kompakt bir buton. Min 48dp dokunma alanı
+                                                        // (SizedBox height: 48) korunuyor, ama tam
+                                                        // genişlik kaplamıyor - alt alta birden fazla
+                                                        // ilaç kartı olduğunda dikey yer israf etmiyor.
+                                                        Material(
+                                                          color: Colors
+                                                              .transparent,
+                                                          child: InkWell(
+                                                            onTap: () =>
+                                                                _toggleTaken(
+                                                                  medicine.id,
+                                                                  medName,
+                                                                  isTakenToday,
+                                                                  today,
+                                                                ),
+                                                            borderRadius:
+                                                                BorderRadius.circular(
+                                                                  24,
+                                                                ),
+                                                            child: Container(
+                                                              height: 48,
+                                                              padding:
+                                                                  const EdgeInsets.symmetric(
+                                                                    horizontal:
+                                                                        14,
+                                                                  ),
+                                                              decoration: BoxDecoration(
+                                                                color:
+                                                                    const Color(
+                                                                      0xFF4DB6AC,
+                                                                    ),
+                                                                borderRadius:
+                                                                    BorderRadius.circular(
+                                                                      24,
+                                                                    ),
+                                                              ),
+                                                              child: Row(
+                                                                mainAxisSize:
+                                                                    MainAxisSize
+                                                                        .min,
+                                                                children: [
+                                                                  const Icon(
+                                                                    Icons.check,
+                                                                    color: Colors
+                                                                        .white,
+                                                                    size: 20,
+                                                                  ),
+                                                                  const SizedBox(
+                                                                    width: 6,
+                                                                  ),
+                                                                  Text(
+                                                                    "İçtim",
+                                                                    style: GoogleFonts.poppins(
+                                                                      color: Colors
+                                                                          .white,
+                                                                      fontSize:
+                                                                          15,
+                                                                      fontWeight:
+                                                                          FontWeight
+                                                                              .w700,
+                                                                    ),
+                                                                  ),
+                                                                ],
+                                                              ),
                                                             ),
-                                                        icon: Icon(
-                                                          isTakenToday
-                                                              ? Icons
-                                                                    .check_circle
-                                                              : Icons
-                                                                    .notifications_active,
-                                                          color: isTakenToday
-                                                              ? Colors.green
-                                                              : Colors.orange,
-                                                          size: 28,
+                                                          ),
                                                         ),
-                                                        padding:
-                                                            EdgeInsets.zero,
-                                                        constraints:
-                                                            const BoxConstraints(),
-                                                      ),
                                                     ],
                                                   ),
                                                 ),
