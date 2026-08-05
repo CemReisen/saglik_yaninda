@@ -1067,7 +1067,7 @@ class _HomePageState extends State<HomePage> {
     if (nextMed == null || docId == null) {
       return Container(
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           gradient: const LinearGradient(
             colors: [Color(0xFF26A69A), Color(0xFF00897B)],
@@ -1086,19 +1086,19 @@ class _HomePageState extends State<HomePage> {
         child: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(0.2),
                 shape: BoxShape.circle,
               ),
-              child: const Text("🎉", style: TextStyle(fontSize: 20)),
+              child: const Text("🎉", style: TextStyle(fontSize: 17)),
             ),
-            const SizedBox(width: 14),
+            const SizedBox(width: 12),
             Expanded(
               child: Text(
                 "Bugünkü tüm ilaçlarını aldın!",
                 style: GoogleFonts.poppins(
-                  fontSize: 17,
+                  fontSize: 16,
                   fontWeight: FontWeight.bold,
                   color: Colors.white,
                 ),
@@ -1117,7 +1117,7 @@ class _HomePageState extends State<HomePage> {
       borderRadius: BorderRadius.circular(18),
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           gradient: const LinearGradient(
             colors: [Color(0xFF26A69A), Color(0xFF00897B)],
@@ -1136,14 +1136,14 @@ class _HomePageState extends State<HomePage> {
         child: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(0.2),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.alarm, color: Colors.white, size: 22),
+              child: const Icon(Icons.alarm, color: Colors.white, size: 18),
             ),
-            const SizedBox(width: 14),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1152,7 +1152,7 @@ class _HomePageState extends State<HomePage> {
                   Text(
                     "Sıradaki",
                     style: GoogleFonts.poppins(
-                      fontSize: 13,
+                      fontSize: 12,
                       fontWeight: FontWeight.w600,
                       color: Colors.white70,
                     ),
@@ -1161,7 +1161,7 @@ class _HomePageState extends State<HomePage> {
                   Text(
                     "$formattedTime - ${nextMed['name'] ?? ''}",
                     style: GoogleFonts.poppins(
-                      fontSize: 18,
+                      fontSize: 16,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
                     ),
@@ -1172,7 +1172,7 @@ class _HomePageState extends State<HomePage> {
                     "${nextMed['dose'] ?? ''}",
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 15,
+                      fontSize: 14,
                       fontWeight: FontWeight.w500,
                     ),
                     maxLines: 1,
@@ -1181,7 +1181,7 @@ class _HomePageState extends State<HomePage> {
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right, size: 22, color: Colors.white70),
+            const Icon(Icons.chevron_right, size: 20, color: Colors.white70),
           ],
         ),
       ),
