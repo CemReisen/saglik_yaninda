@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'package:saglik_yaninda/core/theme/app_colors.dart';
 
 class NotificationsPage extends StatelessWidget {
   const NotificationsPage({super.key});
@@ -170,11 +171,15 @@ class NotificationsPage extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Icon(icon, size: 40, color: Colors.grey[400]),
+          Icon(icon, size: 40, color: AppColors.textSecondaryStrong),
           const SizedBox(height: 8),
           Text(
             message,
-            style: GoogleFonts.poppins(color: Colors.grey[600], fontSize: 13),
+            textAlign: TextAlign.center,
+            style: GoogleFonts.poppins(
+              color: AppColors.textSecondaryStrong,
+              fontSize: 16,
+            ),
           ),
         ],
       ),
@@ -230,8 +235,8 @@ class NotificationsPage extends StatelessWidget {
                 Text(
                   "Saat $time'da \"$medName\" ilacını içtiniz. +100 Puan!",
                   style: GoogleFonts.poppins(
-                    fontSize: 12,
-                    color: Colors.grey[700],
+                    fontSize: 16,
+                    color: AppColors.textSecondaryStrong,
                   ),
                 ),
               ],
@@ -312,8 +317,8 @@ class NotificationsPage extends StatelessWidget {
                         Text(
                           "$caregiverName sağlık durumunuzu takip etmek istiyor.",
                           style: GoogleFonts.poppins(
-                            fontSize: 13,
-                            color: Colors.grey[700],
+                            fontSize: 16,
+                            color: AppColors.textSecondaryStrong,
                           ),
                         ),
                       ],
@@ -345,7 +350,10 @@ class NotificationsPage extends StatelessWidget {
                     ),
                     child: Text(
                       "Reddet",
-                      style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+                      style: GoogleFonts.poppins(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -381,6 +389,7 @@ class NotificationsPage extends StatelessWidget {
                       style: GoogleFonts.poppins(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
+                        fontSize: 16,
                       ),
                     ),
                   ),
