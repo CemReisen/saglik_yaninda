@@ -117,3 +117,21 @@ Commit: `2c8e8dc` (`feature/ui-shell` dalına push edildi).
 
 ### Not: `saglik-yaninda-backend` ayrı bir Node.js backend (2026-08-05)
 `../saglik-yaninda-backend` klasöründe ayrı bir git deposu ve ayrı bir Node.js backend var (Render'da deploy ediliyor). Bugün bu backend'de kritik bir güvenlik açığı (sızdırılmış servis hesabı anahtarı — `serviceAccountKey.json` GitHub'da açıkta duruyordu) tespit edilip düzeltildi. **Detaylar o klasörün kendi `CLAUDE.md`'sinde.**
+
+## UI Revizyonu tamamlandı: yaşlı kullanıcılar için hedefli iyileştirmeler (2026-08-05)
+
+**Kapsam:** Baştan yazım değil — mevcut tasarım (teal/yeşil-mavi, kart tabanlı) korunarak yaşlı kullanıcı kitlesi için okunabilirlik/kullanılabilirlik iyileştirmeleri. `ui-redesign` dalında (`feature/ui-shell`'den açıldı), 10 commit.
+
+**Yapılanlar:**
+- **Design token'ları genişletildi** (`app_theme.dart`, `app_colors.dart`): `TextTheme` yaşlı-dostu skalaya çekildi (bodyLarge 16→18, bodyMedium 14→16), kontrast-güvenli yeni bir ikincil metin rengi eklendi (`AppColors.textSecondaryStrong`, #616161 — `textSecondary` #757575 açık gri zeminlerde ~4.4:1'de sınırda kalıyordu, yeni renk ~5:1+ veriyor).
+- **Alt nav bar'a etiket eklendi** (`main.dart`): 5 ikonun altına kısa etiket (Ana Sayfa, Takvim, Ekle, Bildirimler, Profil), 13sp kalın — nav etiketleri için bilinçli olarak genel "ikincil metin ≥16sp" kuralının istisnası (ikon zaten anlamı taşıyor), ikon boyutu (28/34px) korundu.
+- **SOS butonu büyütüldü ve öne çıkarıldı** (`home_page.dart`): başlıktaki küçük "hap" butondan, kendi tam-genişlik satırındaki büyük kırmızı butona (`_buildSOSButton`) taşındı. Davranış (`_showSOSConfirmDialog`) değişmedi.
+- **Font/kontrast düzeltmeleri 6 sayfada:** `home_page.dart`, `calendar_page.dart`, `notifications_page.dart`, `add_medicine_page.dart`, `profile_page.dart`, `caregiver_home_page.dart` — hepsinde aynı tekrarlayan desen bulundu ve düzeltildi: (a) ikincil/açıklama metinleri 10-13sp → 16sp+, (b) "gri metin üzerine gri zemin" kombinasyonları (özellikle "alınmış ilaç" durumundaki kartlarda: `Colors.grey.shade400` metin `Colors.grey.shade100` zemin üzerinde neredeyse hiç okunmuyordu) `textSecondaryStrong`'a çekildi.
+
+**Yol boyunca bulunan 2 layout bug'ı (gerçek cihazda, Samsung A53):**
+1. **Nav bar yatay overflow ("~12px").** Kök neden: her nav item'ın etiketi sabit `SizedBox(width: 68)` içindeydi (ikon kutusundan geniş olduğu için Column genişliğini bu belirliyordu) → 5×68=340dp sabit minimum genişlik, bar'ın kullanılabilir genişliği (ekran genişliği − margin 32dp − padding 24dp) A53'te (~391dp) bunun altına düşüyordu. Emülatörün daha geniş dp genişliği açığı gizlemişti. **Düzeltme:** her item `Expanded` ile sarıldı (sabit width yerine esnek 1/5), etiket `SizedBox(width: double.infinity)` + `FittedBox(fit: BoxFit.scaleDown)` kullanıyor — en uzun etiket ("Bildirimler") dar bir ekranda bile kesilmeden (ellipsis yerine) orantılı küçülerek sığıyor.
+2. **Skeleton loader dikey overflow ("25px").** Font büyütmeleriyle ilgisizdi (o widget hiç Text/font kullanmıyor, tamamen dekoratif gri kutular) — asıl sebep SOS butonunun `_buildHeader`'dan çıkarılıp kendi satırına taşınmasıydı: bu, skeleton'ı saran `Expanded`'a kalan dikey boşluğu daralttı, küçük ekranlarda sabit içerikli Column artık sığmıyordu. **Düzeltme:** `SingleChildScrollView` (physics: `NeverScrollableScrollPhysics`) ile sarıldı — bir shimmer placeholder'ın kaydırılabilir görünmesi istenmediği için scroll jesti kapalı, ama `SingleChildScrollView` yine de height constraint'ini gevşettiği için overflow hatası hiç oluşmuyor.
+
+**Doğrulama:** `flutter analyze` her commit'te çalıştırıldı — 0 yeni hata (projede zaten var olan info/warning'ler sabit kaldı). Emülatörde (nav bar etiketleri, SOS, doz çipleri) ve gerçek Samsung A53 cihazında (her iki layout bug'ı) test edildi, ikisi de düzeltmelerden sonra doğrulandı. Görsel doğrulama için oluşturulan geçici test hesabı (`uitest.elder.20260805@example.com`) Firebase Auth + Firestore'dan silindi.
+
+**Sırada:** `ui-redesign` dalı `feature/ui-shell`'e (ya da `main`'e) merge edilmeyi bekliyor.
