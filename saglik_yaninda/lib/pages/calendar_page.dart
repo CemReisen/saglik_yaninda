@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:saglik_yaninda/core/theme/app_colors.dart';
+import 'package:saglik_yaninda/widgets/edit_medicine_dialog.dart';
 
 class CalendarPage extends StatefulWidget {
   const CalendarPage({super.key});
@@ -463,10 +464,33 @@ class _CalendarPageState extends State<CalendarPage> {
                                                       ],
                                                     ),
                                                   ),
-                                                  const Icon(
-                                                    Icons.info_outline_rounded,
-                                                    color: Color(0xFF3949AB),
-                                                    size: 22,
+                                                  // Eskiden tepkisiz bir
+                                                  // ikondu (hiçbir
+                                                  // GestureDetector/InkWell
+                                                  // içinde değildi) - artık
+                                                  // ana ekrandaki ile AYNI
+                                                  // ortak düzenleme dialog'unu
+                                                  // açıyor (bkz. lib/widgets/
+                                                  // edit_medicine_dialog.dart).
+                                                  // IconButton, min 48x48dp
+                                                  // dokunma alanını da
+                                                  // otomatik sağlıyor.
+                                                  IconButton(
+                                                    onPressed: () =>
+                                                        showEditMedicineDialog(
+                                                          context: context,
+                                                          data: data,
+                                                          docId:
+                                                              filteredMedicines[index]
+                                                                  .id,
+                                                          uid: user!.uid,
+                                                        ),
+                                                    icon: const Icon(
+                                                      Icons
+                                                          .info_outline_rounded,
+                                                      color: Color(0xFF3949AB),
+                                                      size: 22,
+                                                    ),
                                                   ),
                                                 ],
                                               ),
