@@ -108,7 +108,11 @@ class NotificationService {
     required String body,
     required DateTime scheduledDate,
     required String notificationType,
-    DateTimeComponents matchDateTimeComponents = DateTimeComponents.time,
+    // null = gerçek tek seferlik alarm (bir daha hiç tekrarlamaz) - ör.
+    // "Ertele" butonunun +15dk hatırlatması. Varsayılan (.time), günlük
+    // tekrar eden normal doz alarmları için — mevcut tüm çağrı siteleri
+    // bu varsayılanı kullanmaya devam ediyor, davranış değişmedi.
+    DateTimeComponents? matchDateTimeComponents = DateTimeComponents.time,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     final bool notificationsOn = prefs.getBool('notifications') ?? true;
@@ -200,8 +204,8 @@ class NotificationService {
   /// dozları/günleri için üretilenler) — çağıran taraf bunları elinde
   /// tuttuğu listeyle (`allScheduledIds` gibi) geçirmeli.
   static Future<int> generateUniqueId({List<int> exclude = const []}) async {
-    final List<PendingNotificationRequest> pending =
-        await _noti.pendingNotificationRequests();
+    final List<PendingNotificationRequest> pending = await _noti
+        .pendingNotificationRequests();
     final Set<int> taken = {...pending.map((r) => r.id), ...exclude};
 
     final Random random = Random();

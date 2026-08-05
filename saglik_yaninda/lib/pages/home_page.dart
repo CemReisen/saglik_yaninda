@@ -443,6 +443,74 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  /// "Ertele" butonu: ilacın mevcut günlük/haftalık alarm PROGRAMINA hiç
+  /// dokunmuyor (yarının/sıradaki günün hatırlatması olduğu gibi kalır) -
+  /// sadece şu andan 15 dakika sonrasına GERÇEK TEK SEFERLİK, ekstra bir
+  /// hatırlatma ekliyor.
+  ///
+  /// Bilinçli tasarım kararı: NotificationService.scheduleNotification
+  /// varsayılan olarak matchDateTimeComponents: DateTimeComponents.time
+  /// kullanır (yani GÜNLÜK TEKRAR EDEN bir alarm kurar) - eğer burada önce
+  /// mevcut alarmları iptal edip aynı yardımcıyı varsayılanla çağırsaydık,
+  /// ilacın normal (her gün tekrarlayan) alarmı kalıcı olarak bu yeni saate
+  /// KAYARDI (her ertelemede biraz daha kayarak birikirdi) - "ertele"
+  /// beklentisiyle uyuşmuyor. Bunun yerine matchDateTimeComponents: null
+  /// geçirilerek gerçek tek seferlik bir alarm kuruluyor, mevcut alarmlara
+  /// hiç dokunulmuyor.
+  ///
+  /// Yeni id, Firestore'daki notificationIds listesine EKLENİYOR (üzerine
+  /// yazılmıyor) - hem mevcut tekrarlı alarmların id'leri kaybolmasın hem
+  /// de bu tek seferlik alarm "hayalet alarm" olmasın diye (ilaç bu 15dk
+  /// içinde silinir/düzenlenirse iptal akışları bu id'yi de görüp iptal
+  /// edebilsin).
+  ///
+  /// lastTakenDate/alınma durumuna hiç dokunulmuyor - backend cron'un
+  /// "içmedi" tespiti bundan bağımsız çalışmaya devam ediyor; ertelenen
+  /// sadece cihazdaki hatırlatma sesi.
+  Future<void> _postponeMedicine(
+    String docId,
+    Map<String, dynamic> data,
+  ) async {
+    final String medName = data['name'] ?? 'İlaç';
+    final int newId = await NotificationService.generateUniqueId();
+    final DateTime scheduledDate = DateTime.now().add(
+      const Duration(minutes: 15),
+    );
+
+    await NotificationService.scheduleNotification(
+      id: newId,
+      title: "İlaç Vakti: $medName",
+      body: "${data['dose'] ?? ''} - ${data['hungerStatus'] ?? ''}",
+      scheduledDate: scheduledDate,
+      notificationType: data['notificationType'] ?? "Standart",
+      matchDateTimeComponents: null,
+    );
+
+    final List<int> existingIds = NotificationService.extractNotificationIds(
+      data,
+    );
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user!.uid)
+        .collection('medicines')
+        .doc(docId)
+        .update({
+          'notificationIds': [...existingIds, newId],
+        });
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            "$medName için hatırlatma 15 dakika sonraya ertelendi.",
+          ),
+          backgroundColor: const Color(0xFF4DB6AC),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
   /// Bugünün henüz alınmamış ilaçları arasından saati en yakın olanı döner.
   /// Bilinçli olarak "şu andan sonraki" ile sınırlamıyoruz: saati geçmiş ama
   /// hâlâ işaretlenmemiş (gecikmiş) bir ilaç, eskiden bu filtreden sessizce
@@ -1440,6 +1508,23 @@ class _HomePageState extends State<HomePage> {
                                                               .start,
                                                       children: [
                                                         Row(
+                                                          // İçtim (+ Ertele)
+                                                          // buton alanı iki
+                                                          // satırlı bir
+                                                          // Column'a
+                                                          // çıktığından, ikon/
+                                                          // saat/isim
+                                                          // bloğuyla dikey
+                                                          // hizasının bozulmaması
+                                                          // için açıkça
+                                                          // ortalanıyor (Row'un
+                                                          // varsayılanı zaten
+                                                          // center, ama açıkça
+                                                          // yazmak niyeti
+                                                          // netleştiriyor).
+                                                          crossAxisAlignment:
+                                                              CrossAxisAlignment
+                                                                  .center,
                                                           children: [
                                                             AnimatedContainer(
                                                               duration:
@@ -1581,69 +1666,109 @@ class _HomePageState extends State<HomePage> {
                                                               // (SizedBox height: 48) korunuyor, ama tam
                                                               // genişlik kaplamıyor - alt alta birden fazla
                                                               // ilaç kartı olduğunda dikey yer israf etmiyor.
-                                                              Material(
-                                                                color: Colors
-                                                                    .transparent,
-                                                                child: InkWell(
-                                                                  onTap: () =>
-                                                                      _toggleTaken(
+                                                              // Altına, düşük vurgulu "Ertele" metin-linki
+                                                              // eklendi - İçtim'in dolu/yeşil-teal stiliyle
+                                                              // yarışmıyor, birincil aksiyon İçtim olarak
+                                                              // kalıyor.
+                                                              Column(
+                                                                mainAxisSize:
+                                                                    MainAxisSize
+                                                                        .min,
+                                                                crossAxisAlignment:
+                                                                    CrossAxisAlignment
+                                                                        .end,
+                                                                children: [
+                                                                  Material(
+                                                                    color: Colors
+                                                                        .transparent,
+                                                                    child: InkWell(
+                                                                      onTap: () => _toggleTaken(
                                                                         medicine
                                                                             .id,
                                                                         medName,
                                                                         isTakenToday,
                                                                         today,
                                                                       ),
-                                                                  borderRadius:
-                                                                      BorderRadius.circular(
-                                                                        24,
-                                                                      ),
-                                                                  child: Container(
-                                                                    height: 48,
-                                                                    padding: const EdgeInsets.symmetric(
-                                                                      horizontal:
-                                                                          14,
-                                                                    ),
-                                                                    decoration: BoxDecoration(
-                                                                      color: const Color(
-                                                                        0xFF4DB6AC,
-                                                                      ),
                                                                       borderRadius:
                                                                           BorderRadius.circular(
                                                                             24,
                                                                           ),
-                                                                    ),
-                                                                    child: Row(
-                                                                      mainAxisSize:
-                                                                          MainAxisSize
-                                                                              .min,
-                                                                      children: [
-                                                                        const Icon(
-                                                                          Icons
-                                                                              .check,
-                                                                          color:
-                                                                              Colors.white,
-                                                                          size:
-                                                                              20,
+                                                                      child: Container(
+                                                                        height:
+                                                                            48,
+                                                                        padding: const EdgeInsets.symmetric(
+                                                                          horizontal:
+                                                                              14,
                                                                         ),
-                                                                        const SizedBox(
-                                                                          width:
-                                                                              6,
-                                                                        ),
-                                                                        Text(
-                                                                          "İçtim",
-                                                                          style: GoogleFonts.poppins(
-                                                                            color:
-                                                                                Colors.white,
-                                                                            fontSize:
-                                                                                15,
-                                                                            fontWeight:
-                                                                                FontWeight.w700,
+                                                                        decoration: BoxDecoration(
+                                                                          color: const Color(
+                                                                            0xFF4DB6AC,
+                                                                          ),
+                                                                          borderRadius: BorderRadius.circular(
+                                                                            24,
                                                                           ),
                                                                         ),
-                                                                      ],
+                                                                        child: Row(
+                                                                          mainAxisSize:
+                                                                              MainAxisSize.min,
+                                                                          children: [
+                                                                            const Icon(
+                                                                              Icons.check,
+                                                                              color: Colors.white,
+                                                                              size: 20,
+                                                                            ),
+                                                                            const SizedBox(
+                                                                              width: 6,
+                                                                            ),
+                                                                            Text(
+                                                                              "İçtim",
+                                                                              style: GoogleFonts.poppins(
+                                                                                color: Colors.white,
+                                                                                fontSize: 15,
+                                                                                fontWeight: FontWeight.w700,
+                                                                              ),
+                                                                            ),
+                                                                          ],
+                                                                        ),
+                                                                      ),
                                                                     ),
                                                                   ),
-                                                                ),
+                                                                  TextButton(
+                                                                    onPressed: () =>
+                                                                        _postponeMedicine(
+                                                                          medicine
+                                                                              .id,
+                                                                          data,
+                                                                        ),
+                                                                    style: TextButton.styleFrom(
+                                                                      padding: const EdgeInsets.symmetric(
+                                                                        horizontal:
+                                                                            8,
+                                                                      ),
+                                                                      minimumSize:
+                                                                          const Size(
+                                                                            48,
+                                                                            32,
+                                                                          ),
+                                                                      tapTargetSize:
+                                                                          MaterialTapTargetSize
+                                                                              .shrinkWrap,
+                                                                    ),
+                                                                    child: Text(
+                                                                      "Ertele",
+                                                                      style: GoogleFonts.poppins(
+                                                                        color: AppColors
+                                                                            .textSecondaryStrong,
+                                                                        fontSize:
+                                                                            13,
+                                                                        fontWeight:
+                                                                            FontWeight.w600,
+                                                                        decoration:
+                                                                            TextDecoration.underline,
+                                                                      ),
+                                                                    ),
+                                                                  ),
+                                                                ],
                                                               ),
                                                           ],
                                                         ),
