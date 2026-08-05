@@ -9,6 +9,7 @@ import 'package:saglik_yaninda/services/notification_service.dart';
 import 'package:intl/intl.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:connectivity_plus/connectivity_plus.dart'; // 🔥 YENİ: İNTERNET KONTROL PAKETİ
+import 'package:saglik_yaninda/core/theme/app_colors.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -606,7 +607,10 @@ class _HomePageState extends State<HomePage> {
                   children: [
                     const Text(
                       "Kullanım Şekli",
-                      style: TextStyle(fontSize: 12, color: Colors.grey),
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: AppColors.textSecondaryStrong,
+                      ),
                     ),
                     DropdownButton<String>(
                       value: selectedHunger,
@@ -890,7 +894,7 @@ class _HomePageState extends State<HomePage> {
                         style: TextStyle(
                           color: Colors.red,
                           fontWeight: FontWeight.bold,
-                          fontSize: 12,
+                          fontSize: 16,
                         ),
                       ),
                     ],
@@ -922,7 +926,7 @@ class _HomePageState extends State<HomePage> {
                 "Notlar:",
                 style: GoogleFonts.poppins(
                   fontWeight: FontWeight.w600,
-                  fontSize: 13,
+                  fontSize: 16,
                   color: Colors.grey[700],
                 ),
               ),
@@ -937,7 +941,7 @@ class _HomePageState extends State<HomePage> {
                 ),
                 child: Text(
                   data['description'] ?? "Not eklenmemiş.",
-                  style: const TextStyle(fontSize: 13, color: Colors.black87),
+                  style: const TextStyle(fontSize: 16, color: Colors.black87),
                 ),
               ),
             ],
@@ -963,7 +967,7 @@ class _HomePageState extends State<HomePage> {
                       ),
                       Text(
                         "Sil",
-                        style: TextStyle(color: Colors.redAccent, fontSize: 11),
+                        style: TextStyle(color: Colors.redAccent, fontSize: 14),
                       ),
                     ],
                   ),
@@ -977,7 +981,7 @@ class _HomePageState extends State<HomePage> {
                       Icon(Icons.edit, color: Colors.blueGrey, size: 22),
                       Text(
                         "Düzenle",
-                        style: TextStyle(color: Colors.blueGrey, fontSize: 11),
+                        style: TextStyle(color: Colors.blueGrey, fontSize: 14),
                       ),
                     ],
                   ),
@@ -1018,12 +1022,18 @@ class _HomePageState extends State<HomePage> {
           const SizedBox(height: 4),
           Text(
             text,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
             textAlign: TextAlign.center,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
-          Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey)),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 16,
+              color: AppColors.textSecondaryStrong,
+            ),
+          ),
         ],
       ),
     ),
@@ -1032,13 +1042,16 @@ class _HomePageState extends State<HomePage> {
   Widget _buildInfoRow(IconData icon, String label, String value) => Row(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Icon(icon, size: 16, color: Colors.grey),
+      Icon(icon, size: 16, color: AppColors.textSecondaryStrong),
       const SizedBox(width: 8),
-      Text("$label ", style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+      Text(
+        "$label ",
+        style: const TextStyle(color: AppColors.textSecondaryStrong, fontSize: 16),
+      ),
       Expanded(
         child: Text(
           value,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
         ),
       ),
     ],
@@ -1080,73 +1093,75 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
           const SizedBox(width: 10),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              GestureDetector(
-                onTap: () => _showSOSConfirmDialog(),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 10,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE53935),
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.redAccent.withOpacity(0.3),
-                        blurRadius: 8,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.notifications_active,
-                        color: Colors.white,
-                        size: 18,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        "SOS",
-                        style: GoogleFonts.poppins(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ],
-                  ),
+          Container(
+            width: 45,
+            height: 45,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: const Color(0xFFEAF5F4),
+              border: Border.all(
+                color: const Color(0xFF4DB6AC).withOpacity(0.5),
+                width: 2,
+              ),
+            ),
+            child: Center(
+              child: Text(
+                firstName.isNotEmpty ? firstName[0].toUpperCase() : "E",
+                style: GoogleFonts.poppins(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: const Color(0xFF00695C),
                 ),
               ),
-              const SizedBox(width: 12),
-              Container(
-                width: 45,
-                height: 45,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: const Color(0xFFEAF5F4),
-                  border: Border.all(
-                    color: const Color(0xFF4DB6AC).withOpacity(0.5),
-                    width: 2,
-                  ),
-                ),
-                child: Center(
-                  child: Text(
-                    firstName.isNotEmpty ? firstName[0].toUpperCase() : "E",
-                    style: GoogleFonts.poppins(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: const Color(0xFF00695C),
-                    ),
-                  ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// SOS artık başlık satırındaki küçük bir "hap" buton değil, kendi
+  /// tam-genişlik satırında — acil durum eylemi için daha büyük/belirgin
+  /// bir dokunma hedefi. Davranış (onTap) değişmedi, sadece boyut/konum.
+  Widget _buildSOSButton() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
+      child: GestureDetector(
+        onTap: () => _showSOSConfirmDialog(),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          decoration: BoxDecoration(
+            color: const Color(0xFFE53935),
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.redAccent.withOpacity(0.35),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(
+                Icons.notifications_active,
+                color: Colors.white,
+                size: 26,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                "SOS",
+                style: GoogleFonts.poppins(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 20,
                 ),
               ),
             ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -1257,14 +1272,14 @@ class _HomePageState extends State<HomePage> {
                     Text(
                       "Günlük İlaç Tamamlama",
                       style: GoogleFonts.poppins(
-                        fontSize: 12,
+                        fontSize: 16,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                     Text(
                       "%$percentage",
                       style: GoogleFonts.poppins(
-                        fontSize: 12,
+                        fontSize: 16,
                         fontWeight: FontWeight.bold,
                         color: const Color(0xFF4DB6AC),
                       ),
@@ -1338,7 +1353,7 @@ class _HomePageState extends State<HomePage> {
                       Text(
                         "Sıradaki: ",
                         style: GoogleFonts.poppins(
-                          fontSize: 13,
+                          fontSize: 16,
                           fontWeight: FontWeight.w500,
                           color: Colors.white70,
                         ),
@@ -1347,7 +1362,7 @@ class _HomePageState extends State<HomePage> {
                         child: Text(
                           nextMed['name'] ?? '',
                           style: GoogleFonts.poppins(
-                            fontSize: 14,
+                            fontSize: 16,
                             fontWeight: FontWeight.bold,
                             color: Colors.white,
                           ),
@@ -1362,7 +1377,7 @@ class _HomePageState extends State<HomePage> {
                     "Saat $formattedTime • ${nextMed['dose']}",
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 12,
+                      fontSize: 16,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -1386,19 +1401,19 @@ class _HomePageState extends State<HomePage> {
         // 🔥 İŞTE O EFSANEVİ UYARI BARI
         AnimatedContainer(
           duration: const Duration(milliseconds: 300),
-          height: _isOffline ? 40 : 0,
+          height: _isOffline ? 44 : 0,
           color: Colors.redAccent,
           child: _isOffline
               ? Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.wifi_off, color: Colors.white, size: 16),
+                    const Icon(Icons.wifi_off, color: Colors.white, size: 18),
                     const SizedBox(width: 8),
                     Text(
                       "İnternet bağlantısı yok (Çevrimdışı Mod)",
                       style: GoogleFonts.poppins(
                         color: Colors.white,
-                        fontSize: 12,
+                        fontSize: 14,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -1431,6 +1446,7 @@ class _HomePageState extends State<HomePage> {
                     return Column(
                       children: [
                         _buildHeader(firstName),
+                        _buildSOSButton(),
                         Expanded(child: _buildSkeletonLoader()),
                       ],
                     );
@@ -1486,6 +1502,7 @@ class _HomePageState extends State<HomePage> {
                   return Column(
                     children: [
                       _buildHeader(firstName),
+                      _buildSOSButton(),
                       _buildProgressCard(totalCount, takenCount),
                       _buildNextDoseCard(
                         nextMedDoc?.data() as Map<String, dynamic>?,
@@ -1538,7 +1555,7 @@ class _HomePageState extends State<HomePage> {
                                         style: const TextStyle(
                                           color: Color(0xFF00695C),
                                           fontWeight: FontWeight.w600,
-                                          fontSize: 13,
+                                          fontSize: 15,
                                         ),
                                       ),
                                     ),
@@ -1690,14 +1707,14 @@ class _HomePageState extends State<HomePage> {
                                                             Text(
                                                               time,
                                                               style: TextStyle(
-                                                                fontSize: 14,
+                                                                fontSize: 16,
                                                                 fontWeight:
                                                                     FontWeight
                                                                         .bold,
                                                                 color:
                                                                     isTakenToday
-                                                                    ? Colors
-                                                                          .grey
+                                                                    ? AppColors
+                                                                          .textSecondaryStrong
                                                                     : const Color(
                                                                         0xFF00695C,
                                                                       ),
@@ -1709,11 +1726,11 @@ class _HomePageState extends State<HomePage> {
                                                                   Icon(
                                                                     Icons
                                                                         .warning_amber_rounded,
-                                                                    size: 16,
+                                                                    size: 18,
                                                                     color:
                                                                         isTakenToday
-                                                                        ? Colors
-                                                                              .grey[400]
+                                                                        ? AppColors
+                                                                              .textSecondaryStrong
                                                                         : Colors
                                                                               .redAccent,
                                                                   ),
@@ -1726,13 +1743,13 @@ class _HomePageState extends State<HomePage> {
                                                                     medName,
                                                                     style: GoogleFonts.poppins(
                                                                       fontSize:
-                                                                          16,
+                                                                          18,
                                                                       fontWeight:
                                                                           FontWeight
                                                                               .w700,
                                                                       color:
                                                                           isTakenToday
-                                                                          ? Colors.grey
+                                                                          ? AppColors.textSecondaryStrong
                                                                           : Colors.black87,
                                                                       decoration:
                                                                           isTakenToday
@@ -1749,19 +1766,18 @@ class _HomePageState extends State<HomePage> {
                                                             ),
                                                             Text(
                                                               doseInfo,
-                                                              style: TextStyle(
-                                                                fontSize: 12,
+                                                              style: const TextStyle(
+                                                                fontSize: 16,
                                                                 fontWeight:
                                                                     FontWeight
                                                                         .w500,
+                                                                // Tek renk: eskiden alındığında grey.shade400
+                                                                // metin grey.shade100 kart zemininde neredeyse
+                                                                // okunmuyordu (kontrast < 2:1). textSecondaryStrong
+                                                                // hem beyaz hem grey.shade100 zeminde ~5:1+ verir.
                                                                 color:
-                                                                    isTakenToday
-                                                                    ? Colors
-                                                                          .grey
-                                                                          .shade400
-                                                                    : Colors
-                                                                          .grey
-                                                                          .shade600,
+                                                                    AppColors
+                                                                        .textSecondaryStrong,
                                                               ),
                                                               maxLines: 1,
                                                               overflow:
