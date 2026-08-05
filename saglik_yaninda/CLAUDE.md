@@ -76,3 +76,33 @@ Düzeltme:
 
 ### Not: test ortamı sınırlaması (gerçek bug değil)
 Aynı araştırma sürecinde ayrıca fark edildi: **duplicate edilmiş emülatörler Firebase Installations ID'sini (dolayısıyla FCM token'ı) paylaşabiliyor** — elder ve caregiver hesapları klonlanmış bir emülatörde test edilirse ikisi de aynı token'a sahip olur ve bildirim "yanlış yerde" (aynı cihazda) görünür/görünmez gibi kafa karıştırıcı sonuçlar verir. Bu bir kod hatası değildi. **İleride test edilirken emülatör "Duplicate" ile değil "Create Device" ile bağımsız oluşturulmalı**, ya da gerçek cihaz + tek emülatör kombinasyonu tercih edilmeli.
+
+## Küçük temizlik maddeleri (2026-08-05)
+
+### Çözülmüş: Bildirim id'lerinde çakışma riski
+`add_medicine_page.dart` ve `home_page.dart`'taki alarm kurulumları `Random().nextInt(1000000)` ile id üretiyordu — hem aynı kaydetme/düzenleme işlemi içindeki diğer doz/gün alarmlarıyla hem de kullanıcının **başka** ilaçları için cihazda hâlâ etkin (pending) alarmlarla çakışma ihtimali vardı. `flutter_local_notifications` id çakışmasında hata fırlatmıyor, sessizce üzerine yazıyor — çakışan iki alarmdan biri kullanıcı hiç fark etmeden kayboluyordu.
+
+Düzeltme: `NotificationService.generateUniqueId({List<int> exclude})` eklendi — id üretirken `_noti.pendingNotificationRequests()` ile cihazdaki gerçek pending alarm id'lerine bakıyor (Firestore'daki `notificationIds` alanları değil; OS'ta hangi id'lerin dolu olduğunu kesin bilen tek kaynak bu), `exclude` ile de aynı işlem içinde henüz cihaza kurulmamış ama zaten üretilmiş id'leri (`allScheduledIds`/`newNotificationIds`) dışlıyor. Üç çağrı sitesi (`add_medicine_page.dart`'ta 2, `home_page.dart`'ın Düzenle akışında 2) bu yardımcıya geçirildi; `home_page.dart`'ta eskiler zaten yenilerden ÖNCE iptal edildiği için ek bir çakışma riski yok (bkz. bir üstteki madde).
+
+### Çözülmüş: Ölü kod temizliği
+- `lib/models/medicine_model.dart` (`MedicineModel`) — hiçbir yerde import edilmiyordu, silindi.
+- `fl_chart` paketi (`pubspec.yaml`) — hiçbir dosyada `fl_chart` import'u yoktu, kaldırıldı.
+- `add_medicine_page.dart`'ta ilaç dokümanına yazılan `'isTaken': false` alanı — hiçbir yerde okunmuyordu; gerçek "bugün alındı mı" takibi `lastTakenDate` alanı üzerinden yapılıyor (`home_page.dart` → `_applyMedicineTakenWrites`/`_toggleTaken`). Yazma satırı kaldırıldı.
+
+### Çözülmüş: Gemini model adı doğrulaması
+`home_page.dart`'taki AI Asistan `GenerativeModel(model: 'gemini-3.1-flash-lite-preview', ...)` kullanıyordu. Google'ın resmi model listesi (ai.google.dev/gemini-api/docs/models) doğrulandığında bu preview model'in **kapatıldığı** ("Shut down", "Previous models" altında) görüldü — kararlı karşılığı `gemini-3.1-flash-lite`. Model adı güncellendi; aksi halde AI Asistan sohbeti sessizce hata veriyor olabilirdi (bu oturumda gerçek API çağrısıyla ayrıca doğrulanmadı, sadece resmî dokümantasyon üzerinden).
+
+**Not (2026-08-05):** Model adı düzeltmesinden sonra kullanıcı "Bir bağlantı hatası oluştu" hatası almaya devam etti (internet bağlıyken). Araştırma sırasında (a) `catch` bloğunun gerçek exception'ı yutup genel bir mesaj gösterdiği, (b) `GEMINI_API_KEY`'in `--dart-define` ile build'e doğru şekilde geçtiği (aksi halde farklı bir "kullanılamıyor" mesajı görünürdü), (c) `google_generative_ai` paketinin (0.4.7, pub.dev'deki en güncel ama **deprecated** ilan edilmiş sürüm) model adını client-side doğrulamadığı tespit edildi — kesin kök neden (muhtemelen API key sorunu) canlı testle doğrulanamadan, aşağıdaki karar nedeniyle araştırma sonlandırıldı.
+
+## AI Asistan özelliği tamamen kaldırıldı (2026-08-05)
+
+**Karar:** Gemini API için sürekli ödeme/kota yönetimi istenmiyor; özellik hedef kitle (yaşlı kullanıcılar) için öncelikli değildi. Yukarıdaki "bağlantı hatası" sorunu araştırılırken bu karar alındı — kök neden bulunup düzeltilmek yerine özellik komple kaldırıldı.
+
+Kaldırılanlar:
+- `lib/pages/home_page.dart`: `AiAssistantPage`/`_AiAssistantPageState` sınıfları (chat UI, Gemini çağrısı, `GEMINI_API_KEY`/`String.fromEnvironment` okuması dahil ~410 satır) ve ona navigate eden `_buildAssistantSearchBar` arama çubuğu widget'ı (hem skeleton-loading hem normal `Column` dallarındaki çağrı siteleri) silindi.
+- `pubspec.yaml`: `google_generative_ai` (kullanıcının istediği) ve `speech_to_text` (yalnızca AI Asistan'ın mikrofon girişi için kullanılıyordu, kaldırıldıktan sonra tamamen ölü kalıyordu — birlikte kaldırıldı) bağımlılıkları kaldırıldı.
+- `flutter analyze`: 0 hata (sadece projede zaten var olan, ilgisiz `withOpacity`/`print` gibi info/warning'ler kaldı).
+
+`android/app/src/main/AndroidManifest.xml`'deki `RECORD_AUDIO` izni de kaldırıldı (yalnızca `speech_to_text` için ekliydi, kullanıcı onayıyla).
+
+**Artık gerekli değil:** `flutter run`/`build` komutlarına `--dart-define=GEMINI_API_KEY=...` geçirmeye gerek yok — kod hiçbir yerde bu env var'ı okumuyor.

@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
@@ -182,6 +184,34 @@ class NotificationService {
     print(
       "⏰ Alarm kuruldu ($finalType - Sessiz Mod: $silentMode): $id - ${scheduledTZDate.hour}:${scheduledTZDate.minute.toString().padLeft(2, '0')}",
     );
+  }
+
+  /// `Random().nextInt(1000000)` ile üretilen id'ler cihazda hâlâ etkin
+  /// (pending) başka bir alarmla çakışırsa, `flutter_local_notifications`
+  /// bunu hata vermeden sessizce üzerine yazar — biri sessizce kaybolur.
+  /// Bu yüzden id üretirken cihazdaki gerçek pending listesine bakıyoruz
+  /// (Firestore'daki `notificationIds` alanları değil — asıl kaynak bu,
+  /// çünkü orada tutarsızlık olsa bile OS'ta hangi id'lerin dolu olduğunu
+  /// kesin olarak bilen tek yer `pendingNotificationRequests()`).
+  ///
+  /// `exclude`: aynı kaydetme/düzenleme işlemi içinde bu çağrıdan ÖNCE
+  /// üretilmiş ama henüz `scheduleNotification` ile cihaza kurulmadığı
+  /// için pending listesinde daha görünmeyen id'ler (ör. aynı ilacın diğer
+  /// dozları/günleri için üretilenler) — çağıran taraf bunları elinde
+  /// tuttuğu listeyle (`allScheduledIds` gibi) geçirmeli.
+  static Future<int> generateUniqueId({List<int> exclude = const []}) async {
+    final List<PendingNotificationRequest> pending =
+        await _noti.pendingNotificationRequests();
+    final Set<int> taken = {...pending.map((r) => r.id), ...exclude};
+
+    final Random random = Random();
+    int candidate;
+    int attempts = 0;
+    do {
+      candidate = random.nextInt(1 << 31);
+      attempts++;
+    } while (taken.contains(candidate) && attempts < 100);
+    return candidate;
   }
 
   static Future<void> cancelNotification(int id) async {

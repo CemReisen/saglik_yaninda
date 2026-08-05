@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -337,7 +336,9 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
 
           if (!alreadyExpired) {
             if (_repeatType == "Her Gün") {
-              int id = Random().nextInt(1000000);
+              int id = await NotificationService.generateUniqueId(
+                exclude: allScheduledIds,
+              );
 
               DateTime scheduledDate = DateTime(
                 now.year,
@@ -366,7 +367,9 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
               for (int i = 0; i < _weekDays.length; i++) {
                 if (!_selectedDays[i]) continue;
 
-                int id = Random().nextInt(1000000);
+                int id = await NotificationService.generateUniqueId(
+                  exclude: allScheduledIds,
+                );
                 int targetWeekday = i + 1; // _weekDays[0] = Pzt = weekday 1
                 DateTime scheduledDate = _nextInstanceOfWeekdayTime(
                   targetWeekday,
@@ -395,7 +398,6 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
             'minute': time.minute,
             'label': dose['label'],
             'notificationIds': notificationIds,
-            'isTaken': false,
             'repeatType': _repeatType == "Her Gün" ? "daily" : "custom",
             'days': activeDayNames,
             'hungerStatus': _hungerStatus,

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -8,8 +7,6 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:saglik_yaninda/services/notification_service.dart';
 import 'package:intl/intl.dart';
-import 'package:speech_to_text/speech_to_text.dart' as stt;
-import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:connectivity_plus/connectivity_plus.dart'; // 🔥 YENİ: İNTERNET KONTROL PAKETİ
 
@@ -718,10 +715,10 @@ class _HomePageState extends State<HomePage> {
               onPressed: () async {
                 // 🔥 Saat değiştiyse eski OS alarmları hâlâ eski saatte
                 // çalar — önce eskilerini iptal edip, tamamlandığından emin
-                // olduktan SONRA yenilerini kuruyoruz. Aksi halde yeni
-                // id'ler (Random().nextInt) eskilerle çakışırsa
-                // flutter_local_notifications tarafında belirsiz davranış
-                // oluşabilir.
+                // olduktan SONRA yenilerini kuruyoruz. Yeni id'ler artık
+                // NotificationService.generateUniqueId ile cihazdaki pending
+                // alarmlara bakılarak üretiliyor; eskiler burada zaten iptal
+                // edildiği için onlarla çakışma riski yok.
                 final List<int> oldNotificationIds =
                     NotificationService.extractNotificationIds(data);
                 await NotificationService.cancelNotifications(
@@ -752,7 +749,9 @@ class _HomePageState extends State<HomePage> {
 
                 if (!alreadyExpired) {
                   if (repeatType == "daily") {
-                    final int id = Random().nextInt(1000000);
+                    final int id = await NotificationService.generateUniqueId(
+                      exclude: newNotificationIds,
+                    );
                     DateTime scheduledDate = DateTime(
                       now.year,
                       now.month,
@@ -778,7 +777,9 @@ class _HomePageState extends State<HomePage> {
                       final int dayIndex = NotificationService.weekDays
                           .indexOf(dayName);
                       if (dayIndex == -1) continue;
-                      final int id = Random().nextInt(1000000);
+                      final int id = await NotificationService.generateUniqueId(
+                        exclude: newNotificationIds,
+                      );
                       final DateTime scheduledDate =
                           NotificationService.nextInstanceOfWeekdayTime(
                             dayIndex + 1,
@@ -1150,57 +1151,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildAssistantSearchBar(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        if (_isOffline) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("Asistan çevrimdışıyken kullanılamaz."),
-              backgroundColor: Colors.orange,
-            ),
-          );
-          return;
-        }
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const AiAssistantPage()),
-        );
-      },
-      child: Container(
-        margin: const EdgeInsets.fromLTRB(16, 4, 16, 6),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(30),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: const Row(
-          children: [
-            Icon(Icons.smart_toy_outlined, color: Color(0xFF4DB6AC), size: 26),
-            SizedBox(width: 15),
-            Text(
-              "Asistana Sor...",
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            Spacer(),
-            Icon(Icons.mic_none, color: Color(0xFF4DB6AC), size: 26),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildSkeletonLoader() {
     return Shimmer.fromColors(
       baseColor: Colors.grey.shade300,
@@ -1481,7 +1431,6 @@ class _HomePageState extends State<HomePage> {
                     return Column(
                       children: [
                         _buildHeader(firstName),
-                        _buildAssistantSearchBar(context),
                         Expanded(child: _buildSkeletonLoader()),
                       ],
                     );
@@ -1537,7 +1486,6 @@ class _HomePageState extends State<HomePage> {
                   return Column(
                     children: [
                       _buildHeader(firstName),
-                      _buildAssistantSearchBar(context),
                       _buildProgressCard(totalCount, takenCount),
                       _buildNextDoseCard(
                         nextMedDoc?.data() as Map<String, dynamic>?,
@@ -1875,412 +1823,5 @@ class _HomePageState extends State<HomePage> {
   void dispose() {
     _relationsSubscription?.cancel();
     super.dispose();
-  }
-}
-
-//HUKUKİ KORUMALI CHATBOT SAYFASI (Sabit Kaldı)
-class AiAssistantPage extends StatefulWidget {
-  const AiAssistantPage({super.key});
-
-  @override
-  State<AiAssistantPage> createState() => _AiAssistantPageState();
-}
-
-class _AiAssistantPageState extends State<AiAssistantPage> {
-  late stt.SpeechToText _speech;
-  bool _isListening = false;
-  bool _isTyping = false;
-  final TextEditingController _textController = TextEditingController();
-  final ScrollController _scrollController = ScrollController();
-
-  final List<Map<String, String>> _messages = [
-    {
-      "role": "ai",
-      "text":
-          "Merhaba! Ben Sağlık Yanında dijital asistanınızım. İlaç saatlerinizi takip etmenize yardımcı olabilirim. Ancak unutmayın, ben tıbbi bir uzman değilim. Sağlığınızla ilgili her türlü karar için lütfen doktorunuza danışın. ❤️",
-    },
-  ];
-
-  // Build zamanında inject edilir: --dart-define=GEMINI_API_KEY=xxxx
-  static const String _geminiApiKey = String.fromEnvironment(
-    'GEMINI_API_KEY',
-  );
-  bool get _hasApiKey => _geminiApiKey.isNotEmpty;
-
-  @override
-  void initState() {
-    super.initState();
-    _speech = stt.SpeechToText();
-    _textController.addListener(() {
-      setState(() {});
-    });
-  }
-
-  void _listen() async {
-    FocusScope.of(context).unfocus();
-    if (!_isListening) {
-      bool available = await _speech.initialize(
-        onStatus: (val) {
-          if (val == 'done' || val == 'notListening') {
-            setState(() => _isListening = false);
-          }
-        },
-      );
-      if (available) {
-        setState(() => _isListening = true);
-        _speech.listen(
-          localeId: 'tr_TR',
-          onResult: (val) => setState(() {
-            _textController.text = val.recognizedWords;
-          }),
-        );
-      }
-    } else {
-      setState(() => _isListening = false);
-      _speech.stop();
-    }
-  }
-
-  void _scrollToBottom() {
-    Future.delayed(const Duration(milliseconds: 100), () {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
-      }
-    });
-  }
-
-  Future<void> _sendMessage() async {
-    String userMessage = _textController.text.trim();
-    if (userMessage.isEmpty) return;
-
-    setState(() {
-      _messages.add({"role": "user", "text": userMessage});
-      _textController.clear();
-    });
-    FocusScope.of(context).unfocus();
-    _scrollToBottom();
-
-    if (!_hasApiKey) {
-      setState(() {
-        _messages.add({
-          "role": "ai",
-          "text":
-              "⚠️ AI asistan şu anda kullanılamıyor. Lütfen daha sonra tekrar deneyin.",
-        });
-      });
-      _scrollToBottom();
-      return;
-    }
-
-    setState(() => _isTyping = true);
-
-    try {
-      final String userId = FirebaseAuth.instance.currentUser?.uid ?? "";
-      String ilaclarMetni = "";
-
-      if (userId.isNotEmpty) {
-        final snapshot = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(userId)
-            .collection('medicines')
-            .get();
-
-        if (snapshot.docs.isNotEmpty) {
-          ilaclarMetni = "Kullanıcının Veritabanındaki Aktif İlaçları:\n";
-          for (var doc in snapshot.docs) {
-            var data = doc.data();
-            String saat =
-                "${(data['hour'] ?? 0).toString().padLeft(2, '0')}:${(data['minute'] ?? 0).toString().padLeft(2, '0')}";
-            ilaclarMetni +=
-                "- İlaç: ${data['name']}, Saat: $saat, Doz: ${data['dose']}, Tokluk/Açlık: ${data['hungerStatus']}\n";
-          }
-        } else {
-          ilaclarMetni =
-              "Kullanıcının sistemde kayıtlı herhangi bir ilacı bulunmuyor.\n";
-        }
-      }
-
-      final model = GenerativeModel(
-        model: 'gemini-3.1-flash-lite-preview',
-        apiKey: _geminiApiKey.trim(),
-      );
-
-      final prompt =
-          """
-Sen yaşlı bireylere ilaç takibi ve sağlık konusunda yardımcı olan tonton, saygılı ve uzman bir dijital sağlık asistanısın. Adın 'Sağlık Yanında Asistanı'.
-
-Kritik Güvenlik Talimatı: Sen tıbbi bir doktor veya hekim değilsin. Kullanıcıya ASLA kesin bir reçete, doz değişikliği, ilaç bırakma veya kesin tanı/teşhis önerisinde bulunamazsın. Eğer kullanıcı ilaç yan etkisi, dozaj değişikliği veya tehlikeli bir durum sorarsa, nazikçe bunun tıbbi bir durum olduğunu belirt ve MUTLAKA 'Hekiminize veya en yakın sağlık kuruluşuna başvurun' uyarısını yap.
-
-Aşağıda kullanıcının sadece takvim takibi amacıyla veritabanından çekilen güncel ilaç bilgileri yer almaktadır:
-$ilaclarMetni
-
-Kullanıcının Sorusu: '$userMessage'
-
-Lütfen bu güvenlik sınırları içinde kalarak amcaların/teyzelerin anlayacağı şekilde sade, şefkatli bir Türkçe ile cevap ver. Emojiler kullanabilirsin.
-""";
-
-      final response = await model.generateContent([Content.text(prompt)]);
-
-      setState(() {
-        _isTyping = false;
-        if (response.text != null) {
-          _messages.add({"role": "ai", "text": response.text!});
-        } else {
-          _messages.add({
-            "role": "ai",
-            "text": "Şu an cevap veremiyorum, lütfen tekrar dene.",
-          });
-        }
-      });
-      _scrollToBottom();
-    } catch (e) {
-      print("Gemini Hatası: $e");
-      setState(() {
-        _isTyping = false;
-        _messages.add({
-          "role": "ai",
-          "text": "Bir bağlantı hatası oluştu. Lütfen internetini kontrol et.",
-        });
-      });
-      _scrollToBottom();
-    }
-  }
-
-  @override
-  void dispose() {
-    _speech.stop();
-    _textController.dispose();
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF4F6F9),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF4DB6AC),
-        foregroundColor: Colors.white,
-        elevation: 0,
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: const BoxDecoration(
-                color: Colors.white24,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.smart_toy, size: 24, color: Colors.white),
-            ),
-            const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  "Sağlık Asistanı",
-                  style: GoogleFonts.poppins(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Text(
-                  _isTyping ? "Yazıyor..." : "Çevrimiçi",
-                  style: const TextStyle(fontSize: 12, color: Colors.white70),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-      body: Column(
-        children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.amber.shade50,
-              border: Border(
-                bottom: BorderSide(color: Colors.amber.shade200, width: 1),
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.gavel_rounded,
-                  color: Colors.amber.shade800,
-                  size: 18,
-                ),
-                const SizedBox(width: 10),
-                const Expanded(
-                  child: Text(
-                    "Yasal Uyarı: Bu asistan tıbbi tavsiye vermez. Acil durumlar ve teşhis için doktorunuza başvurunuz.",
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.black87,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          Expanded(
-            child: ListView.builder(
-              controller: _scrollController,
-              padding: const EdgeInsets.all(16),
-              itemCount: _messages.length,
-              itemBuilder: (context, index) {
-                final message = _messages[index];
-                final isUser = message["role"] == "user";
-
-                return Align(
-                  alignment: isUser
-                      ? Alignment.centerRight
-                      : Alignment.centerLeft,
-                  child: Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                    constraints: BoxConstraints(
-                      maxWidth: MediaQuery.of(context).size.width * 0.75,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isUser ? const Color(0xFF4DB6AC) : Colors.white,
-                      borderRadius: BorderRadius.only(
-                        topLeft: const Radius.circular(20),
-                        topRight: const Radius.circular(20),
-                        bottomLeft: Radius.circular(isUser ? 20 : 0),
-                        bottomRight: Radius.circular(isUser ? 0 : 20),
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
-                          blurRadius: 5,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Text(
-                      message["text"]!,
-                      style: GoogleFonts.poppins(
-                        fontSize: 15,
-                        color: isUser ? Colors.white : const Color(0xFF263238),
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-
-          if (_isTyping)
-            const Padding(
-              padding: EdgeInsets.only(bottom: 8.0, left: 24),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  "Asistan düşünüyor...",
-                  style: TextStyle(color: Colors.grey, fontSize: 12),
-                ),
-              ),
-            ),
-
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  offset: const Offset(0, -2),
-                  blurRadius: 10,
-                ),
-              ],
-            ),
-            child: SafeArea(
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF4F6F9),
-                        borderRadius: BorderRadius.circular(30),
-                        border: Border.all(color: Colors.grey.shade300),
-                      ),
-                      child: TextField(
-                        controller: _textController,
-                        maxLines: null,
-                        decoration: InputDecoration(
-                          hintText: _isListening
-                              ? "Dinleniyor..."
-                              : "Bir şeyler yaz...",
-                          hintStyle: TextStyle(
-                            color: _isListening
-                                ? Colors.redAccent
-                                : Colors.grey,
-                          ),
-                          border: InputBorder.none,
-                          icon: Icon(
-                            _isListening
-                                ? Icons.mic
-                                : Icons.keyboard_alt_outlined,
-                            color: _isListening
-                                ? Colors.redAccent
-                                : Colors.grey,
-                          ),
-                        ),
-                        onSubmitted: (_) => _sendMessage(),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  GestureDetector(
-                    onTap: () {
-                      if (_textController.text.isNotEmpty) {
-                        _sendMessage();
-                      } else {
-                        _listen();
-                      }
-                    },
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 300),
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: _isListening
-                            ? Colors.redAccent
-                            : const Color(0xFF4DB6AC),
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFF4DB6AC).withOpacity(0.3),
-                            blurRadius: 8,
-                            offset: const Offset(0, 3),
-                          ),
-                        ],
-                      ),
-                      child: Icon(
-                        _textController.text.isNotEmpty
-                            ? Icons.send_rounded
-                            : Icons.mic,
-                        color: Colors.white,
-                        size: 24,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }
