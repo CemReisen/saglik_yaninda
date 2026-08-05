@@ -106,3 +106,14 @@ Kaldırılanlar:
 `android/app/src/main/AndroidManifest.xml`'deki `RECORD_AUDIO` izni de kaldırıldı (yalnızca `speech_to_text` için ekliydi, kullanıcı onayıyla).
 
 **Artık gerekli değil:** `flutter run`/`build` komutlarına `--dart-define=GEMINI_API_KEY=...` geçirmeye gerek yok — kod hiçbir yerde bu env var'ı okumuyor.
+
+Commit: `2c8e8dc` (`feature/ui-shell` dalına push edildi).
+
+## Proje Durumu (2026-08-05) — güncel özet
+
+- **AI Asistan özelliği tamamen kaldırıldı.** Gemini API için sürekli ödeme/kota yönetimi istenmediği ve hedef kitle (yaşlı kullanıcılar) için öncelikli bir özellik olmadığı için özellik komple sökülüp atıldı (bkz. yukarıdaki bölüm) — kısmi bir bug fix değil, bilinçli bir kapsam kararı.
+- **Altyapı temizlik maddeleri tamamlandı:** bildirim id çakışma riski (`NotificationService.generateUniqueId`), ölü kod (`MedicineModel`, `fl_chart`, kullanılmayan `isTaken` alanı) — bkz. "Küçük temizlik maddeleri" bölümü.
+- `flutter analyze` temiz (0 hata), gerçek cihazda test edildi.
+
+### Not: `saglik-yaninda-backend` ayrı bir Node.js backend (2026-08-05)
+`../saglik-yaninda-backend` klasöründe ayrı bir git deposu ve ayrı bir Node.js backend var (Render'da deploy ediliyor). Bugün bu backend'de kritik bir güvenlik açığı (sızdırılmış servis hesabı anahtarı — `serviceAccountKey.json` GitHub'da açıkta duruyordu) tespit edilip düzeltildi. **Detaylar o klasörün kendi `CLAUDE.md`'sinde.**
