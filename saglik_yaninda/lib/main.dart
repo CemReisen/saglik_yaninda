@@ -312,7 +312,6 @@ class _MainLayoutState extends State<MainLayout> {
                 ],
               ),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: List.generate(5, (index) {
                   bool isSelected = _currentIndex == index;
                   bool isAddButton = index == 2;
@@ -401,64 +400,85 @@ class _MainLayoutState extends State<MainLayout> {
                   // GestureDetector ikon+etiketin ikisini birden sarar —
                   // dokunma alanı büyür (yaşlı kullanıcı için daha kolay
                   // hedeflenir), etiketin de sekmeyi seçmesi sağlanır.
-                  return GestureDetector(
-                    onTap: () => setState(() => _currentIndex = index),
-                    behavior: HitTestBehavior.opaque,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        AnimatedContainer(
-                          duration: const Duration(milliseconds: 250),
-                          width: isAddButton ? 60 : 54,
-                          height: isAddButton ? 60 : 54,
-                          decoration: BoxDecoration(
-                            color: isAddButton
-                                ? AppColors.primary
-                                : (isSelected
-                                      ? Colors.white
-                                      : Colors.transparent),
-                            shape: isAddButton
-                                ? BoxShape.circle
-                                : BoxShape.rectangle,
-                            borderRadius: isAddButton
-                                ? null
-                                : BorderRadius.circular(16),
-                            boxShadow: isSelected && !isAddButton
-                                ? [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.05),
-                                      blurRadius: 4,
-                                    ),
-                                  ]
-                                : (isAddButton
-                                      ? [
-                                          BoxShadow(
-                                            color: AppColors.primary
-                                                .withOpacity(0.3),
-                                            blurRadius: 8,
-                                            offset: const Offset(0, 4),
-                                          ),
-                                        ]
-                                      : []),
+                  //
+                  // Item'lar Expanded ile sarılı (sabit genişlik DEĞİL) —
+                  // önceki sürümde her item'ın etiketi sabit 68dp genişlikte
+                  // bir SizedBox'a oturuyordu: 5 item x 68dp = 340dp, bar'ın
+                  // margin (32dp) + padding (24dp) çıkarılmış genişliği
+                  // (ekran genişliği - 56dp) bunun altına düştüğünde
+                  // (ör. Samsung A53'te ~391dp ekran -> 335dp kullanılabilir
+                  // alan < 340dp) Row'un son çocuğu (Profil) RenderFlex
+                  // overflow veriyordu. Emülatörün daha geniş dp genişliği
+                  // bu açığı gizliyordu. Expanded, her item'ı mevcut alanın
+                  // tam 1/5'ine (hangi genişlik olursa olsun) esnetir; hiçbir
+                  // ekranda taşma olamaz.
+                  return Expanded(
+                    child: GestureDetector(
+                      onTap: () => setState(() => _currentIndex = index),
+                      behavior: HitTestBehavior.opaque,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 250),
+                            width: isAddButton ? 60 : 54,
+                            height: isAddButton ? 60 : 54,
+                            decoration: BoxDecoration(
+                              color: isAddButton
+                                  ? AppColors.primary
+                                  : (isSelected
+                                        ? Colors.white
+                                        : Colors.transparent),
+                              shape: isAddButton
+                                  ? BoxShape.circle
+                                  : BoxShape.rectangle,
+                              borderRadius: isAddButton
+                                  ? null
+                                  : BorderRadius.circular(16),
+                              boxShadow: isSelected && !isAddButton
+                                  ? [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.05),
+                                        blurRadius: 4,
+                                      ),
+                                    ]
+                                  : (isAddButton
+                                        ? [
+                                            BoxShadow(
+                                              color: AppColors.primary
+                                                  .withOpacity(0.3),
+                                              blurRadius: 8,
+                                              offset: const Offset(0, 4),
+                                            ),
+                                          ]
+                                        : []),
+                            ),
+                            child: Center(child: finalIcon),
                           ),
-                          child: Center(child: finalIcon),
-                        ),
-                        const SizedBox(height: 3),
-                        SizedBox(
-                          width: 68,
-                          child: Text(
-                            labels[index],
-                            textAlign: TextAlign.center,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.nunito(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: labelColor,
+                          const SizedBox(height: 3),
+                          // Sabit width yerine: item'ın Expanded'dan aldığı
+                          // genişliğin tamamını kaplar (SizedBox(width:
+                          // double.infinity)), FittedBox(scaleDown) ise
+                          // "Bildirimler" gibi en uzun etiket dar bir ekranda
+                          // bile sığmazsa kelimeyi kesmek (ellipsis) yerine
+                          // yazı tipini orantılı küçültüp tam metni gösterir.
+                          SizedBox(
+                            width: double.infinity,
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                labels[index],
+                                maxLines: 1,
+                                style: GoogleFonts.nunito(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: labelColor,
+                                ),
+                              ),
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   );
                 }),
