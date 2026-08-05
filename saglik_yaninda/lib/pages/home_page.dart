@@ -1196,43 +1196,62 @@ class _HomePageState extends State<HomePage> {
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(30),
               ),
-              child: Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 22,
-                      vertical: 16,
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Container(width: 100, height: 20, color: Colors.white),
-                        Container(
-                          width: 60,
-                          height: 24,
-                          decoration: BoxDecoration(
+              // Bu Column'un içeriği sabit yükseklikte (başlık satırı +
+              // 3x70dp item) ve dıştaki Expanded ona tight bir yükseklik
+              // constraint'i veriyor (ekranın kalan boşluğu ne kadarsa o
+              // kadar). Üstteki SOS butonu artık kendi tam-genişlik satırına
+              // taşındığı için (bkz. _buildSOSButton) bu Expanded'a kalan
+              // boşluk daraldı — küçük ekranlarda (bildirilen: 25px)
+              // RenderFlex overflow oluşuyordu. Bu sadece geçici bir
+              // shimmer placeholder olduğu için içeriği "sıkıştırmak"
+              // yerine SingleChildScrollView ile sarmak en güvenlisi:
+              // veri geldiğinde zaten kayboluyor, en kötü ihtimalle çok
+              // dar bir ekranda son item'ın altı hafifçe kırpılır/kaydırılır
+              // ama sert bir overflow hatası hiç oluşmaz.
+              child: SingleChildScrollView(
+                physics: const NeverScrollableScrollPhysics(),
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 22,
+                        vertical: 16,
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Container(
+                            width: 100,
+                            height: 20,
                             color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
                           ),
+                          Container(
+                            width: 60,
+                            height: 24,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    ...List.generate(
+                      3,
+                      (index) => Container(
+                        margin: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 6,
                         ),
-                      ],
-                    ),
-                  ),
-                  ...List.generate(
-                    3,
-                    (index) => Container(
-                      margin: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 6,
-                      ),
-                      height: 70,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(14),
+                        height: 70,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
