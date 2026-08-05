@@ -1747,149 +1747,170 @@ class _HomePageState extends State<HomePage> {
                                                               // ikonuydu (ne anlama geldiği net değildi) -
                                                               // artık ikon + "İçtim" yazılı, hap şeklinde
                                                               // kompakt bir buton. Min 48dp dokunma alanı
-                                                              // (SizedBox height: 48) korunuyor, ama tam
+                                                              // (Container height: 48) korunuyor, ama tam
                                                               // genişlik kaplamıyor - alt alta birden fazla
                                                               // ilaç kartı olduğunda dikey yer israf etmiyor.
-                                                              // Altına, düşük vurgulu "Ertele" metin-linki
-                                                              // eklendi - İçtim'in dolu/yeşil-teal stiliyle
-                                                              // yarışmıyor, birincil aksiyon İçtim olarak
-                                                              // kalıyor.
-                                                              Column(
-                                                                mainAxisSize:
-                                                                    MainAxisSize
-                                                                        .min,
-                                                                // Kök sebep: bu Column, Row'un
-                                                                // crossAxisAlignment.center'ı yüzünden
-                                                                // kendi içeriğinden (İçtim+Ertele)
-                                                                // daha fazla yükseklik alabiliyor
-                                                                // (satırın en yüksek çocuğu genelde
-                                                                // isim/saat bloğu oluyor) - varsayılan
-                                                                // mainAxisAlignment.start bu fazla
-                                                                // boşluğu tamamen ALTA (Ertele'den
-                                                                // sonraya) itiyordu, İçtim üstte
-                                                                // neredeyse boşluksuz duruyordu.
-                                                                // .center ile fazla boşluk üst/alta
-                                                                // eşit dağılıyor.
-                                                                mainAxisAlignment:
-                                                                    MainAxisAlignment
-                                                                        .center,
-                                                                crossAxisAlignment:
-                                                                    CrossAxisAlignment
-                                                                        .end,
-                                                                children: [
-                                                                  Material(
-                                                                    color: Colors
-                                                                        .transparent,
-                                                                    child: InkWell(
-                                                                      onTap: () => _toggleTaken(
+                                                              //
+                                                              // "Ertele" burada YOK artık - bu satırda
+                                                              // (üst satır: ikon+isim/saat+buton) İçtim'in
+                                                              // altına eklenince buton bloğu (İçtim+Ertele
+                                                              // ≈84px) isim/saat bloğundan (≈42px) çok daha
+                                                              // uzun oluyordu; Row crossAxisAlignment.center
+                                                              // her çocuğu KENDİ boyutuna göre ortaladığından
+                                                              // (Row'un genel yüksekliğine STRETCH etmiyor),
+                                                              // en uzun çocuk (buton) satırın tamamını
+                                                              // kaplayıp İçtim'i tepeye, "fazladan alanı"
+                                                              // Ertele'nin altına yapıştırıyordu -
+                                                              // mainAxisAlignment/crossAxisAlignment
+                                                              // ayarlarıyla düzeltilemeyen yapısal bir
+                                                              // sonuçtu (bkz. CLAUDE.md). Ertele artık alt
+                                                              // satırda (doz bilgisinin yanında) - bu satır
+                                                              // yeniden sadece İçtim içeriyor, isim/saat
+                                                              // bloğuyla benzer yükseklikte olduğu için
+                                                              // .center doğal/dengeli çalışıyor.
+                                                              Material(
+                                                                color: Colors
+                                                                    .transparent,
+                                                                child: InkWell(
+                                                                  onTap: () =>
+                                                                      _toggleTaken(
                                                                         medicine
                                                                             .id,
                                                                         medName,
                                                                         isTakenToday,
                                                                         today,
                                                                       ),
+                                                                  borderRadius:
+                                                                      BorderRadius.circular(
+                                                                        24,
+                                                                      ),
+                                                                  child: Container(
+                                                                    height: 48,
+                                                                    padding: const EdgeInsets.symmetric(
+                                                                      horizontal:
+                                                                          14,
+                                                                    ),
+                                                                    decoration: BoxDecoration(
+                                                                      color: const Color(
+                                                                        0xFF4DB6AC,
+                                                                      ),
                                                                       borderRadius:
                                                                           BorderRadius.circular(
                                                                             24,
                                                                           ),
-                                                                      child: Container(
-                                                                        height:
-                                                                            48,
-                                                                        padding: const EdgeInsets.symmetric(
-                                                                          horizontal:
-                                                                              14,
+                                                                    ),
+                                                                    child: Row(
+                                                                      mainAxisSize:
+                                                                          MainAxisSize
+                                                                              .min,
+                                                                      children: [
+                                                                        const Icon(
+                                                                          Icons
+                                                                              .check,
+                                                                          color:
+                                                                              Colors.white,
+                                                                          size:
+                                                                              20,
                                                                         ),
-                                                                        decoration: BoxDecoration(
-                                                                          color: const Color(
-                                                                            0xFF4DB6AC,
+                                                                        const SizedBox(
+                                                                          width:
+                                                                              6,
+                                                                        ),
+                                                                        Text(
+                                                                          "İçtim",
+                                                                          style: GoogleFonts.poppins(
+                                                                            color:
+                                                                                Colors.white,
+                                                                            fontSize:
+                                                                                15,
+                                                                            fontWeight:
+                                                                                FontWeight.w700,
                                                                           ),
-                                                                          borderRadius: BorderRadius.circular(
-                                                                            24,
-                                                                          ),
                                                                         ),
-                                                                        child: Row(
-                                                                          mainAxisSize:
-                                                                              MainAxisSize.min,
-                                                                          children: [
-                                                                            const Icon(
-                                                                              Icons.check,
-                                                                              color: Colors.white,
-                                                                              size: 20,
-                                                                            ),
-                                                                            const SizedBox(
-                                                                              width: 6,
-                                                                            ),
-                                                                            Text(
-                                                                              "İçtim",
-                                                                              style: GoogleFonts.poppins(
-                                                                                color: Colors.white,
-                                                                                fontSize: 15,
-                                                                                fontWeight: FontWeight.w700,
-                                                                              ),
-                                                                            ),
-                                                                          ],
-                                                                        ),
-                                                                      ),
+                                                                      ],
                                                                     ),
                                                                   ),
-                                                                  TextButton(
-                                                                    onPressed: () =>
-                                                                        _postponeMedicine(
-                                                                          medicine
-                                                                              .id,
-                                                                          data,
-                                                                        ),
-                                                                    style: TextButton.styleFrom(
-                                                                      padding: const EdgeInsets.symmetric(
-                                                                        horizontal:
-                                                                            8,
-                                                                      ),
-                                                                      minimumSize:
-                                                                          const Size(
-                                                                            48,
-                                                                            32,
-                                                                          ),
-                                                                      tapTargetSize:
-                                                                          MaterialTapTargetSize
-                                                                              .shrinkWrap,
-                                                                    ),
-                                                                    child: Text(
-                                                                      "Ertele",
-                                                                      style: GoogleFonts.poppins(
-                                                                        color: AppColors
-                                                                            .textSecondaryStrong,
-                                                                        fontSize:
-                                                                            13,
-                                                                        fontWeight:
-                                                                            FontWeight.w600,
-                                                                        decoration:
-                                                                            TextDecoration.underline,
-                                                                      ),
-                                                                    ),
-                                                                  ),
-                                                                ],
+                                                                ),
                                                               ),
                                                           ],
                                                         ),
                                                         const SizedBox(
                                                           height: 8,
                                                         ),
-                                                        Text(
-                                                          doseInfo,
-                                                          style: const TextStyle(
-                                                            fontSize: 16,
-                                                            fontWeight:
-                                                                FontWeight.w500,
-                                                            // Tek renk: eskiden alındığında grey.shade400
-                                                            // metin grey.shade100 kart zemininde neredeyse
-                                                            // okunmuyordu (kontrast < 2:1). textSecondaryStrong
-                                                            // hem beyaz hem grey.shade100 zeminde ~5:1+ verir.
-                                                            color: AppColors
-                                                                .textSecondaryStrong,
-                                                          ),
-                                                          maxLines: 1,
-                                                          overflow: TextOverflow
-                                                              .ellipsis,
+                                                        // Alt satır: solda doz/kullanım bilgisi, sağda
+                                                        // (sadece alınmamışsa) "Ertele" metin-linki - aynı
+                                                        // hizada, İçtim'in altında/yanında durma ihtiyacını
+                                                        // üst satırdaki hizalama sorununa girmeden
+                                                        // karşılıyor. Expanded, doseInfo uzun olsa bile
+                                                        // Ertele'yi sağda güvenle konumlandırıyor (satır
+                                                        // taşmıyor).
+                                                        Row(
+                                                          children: [
+                                                            Expanded(
+                                                              child: Text(
+                                                                doseInfo,
+                                                                style: const TextStyle(
+                                                                  fontSize: 16,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w500,
+                                                                  // Tek renk: eskiden alındığında grey.shade400
+                                                                  // metin grey.shade100 kart zemininde neredeyse
+                                                                  // okunmuyordu (kontrast < 2:1). textSecondaryStrong
+                                                                  // hem beyaz hem grey.shade100 zeminde ~5:1+ verir.
+                                                                  color: AppColors
+                                                                      .textSecondaryStrong,
+                                                                ),
+                                                                maxLines: 1,
+                                                                overflow:
+                                                                    TextOverflow
+                                                                        .ellipsis,
+                                                              ),
+                                                            ),
+                                                            if (!isTakenToday) ...[
+                                                              const SizedBox(
+                                                                width: 8,
+                                                              ),
+                                                              TextButton(
+                                                                onPressed: () =>
+                                                                    _postponeMedicine(
+                                                                      medicine
+                                                                          .id,
+                                                                      data,
+                                                                    ),
+                                                                style: TextButton.styleFrom(
+                                                                  padding:
+                                                                      const EdgeInsets.symmetric(
+                                                                        horizontal:
+                                                                            8,
+                                                                      ),
+                                                                  minimumSize:
+                                                                      const Size(
+                                                                        48,
+                                                                        32,
+                                                                      ),
+                                                                  tapTargetSize:
+                                                                      MaterialTapTargetSize
+                                                                          .shrinkWrap,
+                                                                ),
+                                                                child: Text(
+                                                                  "Ertele",
+                                                                  style: GoogleFonts.poppins(
+                                                                    color: AppColors
+                                                                        .textSecondaryStrong,
+                                                                    fontSize:
+                                                                        13,
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .w600,
+                                                                    decoration:
+                                                                        TextDecoration
+                                                                            .underline,
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                            ],
+                                                          ],
                                                         ),
                                                       ],
                                                     ),
