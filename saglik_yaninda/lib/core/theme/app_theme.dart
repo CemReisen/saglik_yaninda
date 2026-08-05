@@ -31,10 +31,19 @@ ThemeData buildLightTheme() {
         color: AppColors.textPrimary,
         fontWeight: FontWeight.w600,
       ),
-      bodyLarge: GoogleFonts.nunito(color: AppColors.textPrimary, fontSize: 16),
+      // Kart/bölüm başlıkları için (ör. ilaç adı) — yaşlı kullanıcı hedefi:
+      // gövde metni ≥18sp.
+      titleMedium: GoogleFonts.poppins(
+        color: AppColors.textPrimary,
+        fontWeight: FontWeight.w700,
+        fontSize: 18,
+      ),
+      // Gövde metni: 16 → 18.
+      bodyLarge: GoogleFonts.nunito(color: AppColors.textPrimary, fontSize: 18),
+      // İkincil/açıklama metni: 14 → 16 (yaşlı kullanıcı hedefi: ≥16sp).
       bodyMedium: GoogleFonts.nunito(
         color: AppColors.textSecondary,
-        fontSize: 14,
+        fontSize: 16,
       ),
     ),
   );

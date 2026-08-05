@@ -9,6 +9,12 @@ class AppColors {
   // Metinler
   static const textPrimary = Color(0xFF333333);
   static const textSecondary = Color(0xFF757575);
+  // Açık gri zeminler (ör. #F5F5F5, grey.shade100) üzerinde de yeterli
+  // kontrastı (WCAG AA, ~5:1) koruyan ikincil metin rengi. textSecondary
+  // (#757575) beyaz zeminde sınırda kalıyor, açık gri zeminde yetersiz —
+  // "gri metin/gri zemin" kartlarda (ör. ilaç alındı durumu, detay
+  // kutucukları) bunu kullan.
+  static const textSecondaryStrong = Color(0xFF616161);
 
   // Vurgu / Marka
   static const primary = Color(0xFF4DB6AC); // turkuaz (AppBar, aktif renk)
