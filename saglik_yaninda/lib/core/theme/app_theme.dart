@@ -19,6 +19,14 @@ ThemeData buildLightTheme() {
       ),
       iconTheme: const IconThemeData(color: AppColors.textSecondary),
     ),
+    // Varsayılan CircularProgressIndicator()/LinearProgressIndicator() rengi
+    // (renk verilmemiş her çağrı) Material'ın varsayılan mor tonu yerine
+    // marka rengini (teal) kullansın — ör. main.dart'taki auth state
+    // bekleme ekranı, native splash'ten sonra gelen ilk frame'de "uyumsuz
+    // mor spinner" izlenimi vermesin.
+    progressIndicatorTheme: const ProgressIndicatorThemeData(
+      color: AppColors.primary,
+    ),
     bottomNavigationBarTheme: const BottomNavigationBarThemeData(
       backgroundColor: AppColors.navbarBg,
       selectedItemColor: AppColors.primary,

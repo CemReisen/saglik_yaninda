@@ -57,10 +57,13 @@ flutter_icons:
   min_sdk_android: 21 # Android için minimum gereksinim
 
 flutter_native_splash:
-  color: "#F4F6F9" # Arka plan rengi (Bizim uygulamanın ferah buz grisi)
+  # AppColors.background (lib/core/theme/app_colors.dart) ile birebir aynı —
+  # native splash'ten Flutter'ın ilk frame'ine (Scaffold'un scaffoldBackgroundColor'ı)
+  # geçişte fark edilir bir zemin rengi sıçraması olmasın diye.
+  color: "#F8F9FA"
   image: "assets/images/app_logo.png" # Logonun yolu
   android: true
   ios: true
   android_12:
     image: "assets/images/app_logo.png"
-    icon_background_color: "#F4F6F9"
+    icon_background_color: "#F8F9FA"
