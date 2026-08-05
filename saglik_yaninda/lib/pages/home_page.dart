@@ -1722,223 +1722,251 @@ class _HomePageState extends State<HomePage> {
                                                           horizontal: 14,
                                                           vertical: 8,
                                                         ),
-                                                    child: Row(
+                                                    // Üst satır (ikon + saat/isim +
+                                                    // buton) ile doz/kullanım
+                                                    // bilgisi artık ayrı satırlar -
+                                                    // eskiden doseInfo, isim+saat
+                                                    // Column'ının içindeydi, yani
+                                                    // Expanded genişliği İçtim
+                                                    // butonuyla paylaşılıyordu ve
+                                                    // uzun doz metinleri kesiliyordu
+                                                    // (ellipsis). Şimdi doseInfo
+                                                    // kartın tam genişliğinde,
+                                                    // butonla yer paylaşmayan kendi
+                                                    // satırında.
+                                                    child: Column(
+                                                      crossAxisAlignment:
+                                                          CrossAxisAlignment
+                                                              .start,
                                                       children: [
-                                                        AnimatedContainer(
-                                                          duration:
-                                                              const Duration(
-                                                                milliseconds:
-                                                                    300,
-                                                              ),
-                                                          padding:
-                                                              const EdgeInsets.all(
-                                                                8,
-                                                              ),
-                                                          decoration: BoxDecoration(
-                                                            color: isTakenToday
-                                                                ? Colors
-                                                                      .green
-                                                                      .shade50
-                                                                : const Color(
-                                                                    0xFFE0F2F1,
+                                                        Row(
+                                                          children: [
+                                                            AnimatedContainer(
+                                                              duration:
+                                                                  const Duration(
+                                                                    milliseconds:
+                                                                        300,
                                                                   ),
-                                                            shape:
-                                                                BoxShape.circle,
-                                                          ),
-                                                          child: Icon(
-                                                            medIcon,
-                                                            size: 24,
-                                                            color: isTakenToday
-                                                                ? Colors.green
-                                                                : const Color(
-                                                                    0xFF4DB6AC,
+                                                              padding:
+                                                                  const EdgeInsets.all(
+                                                                    8,
                                                                   ),
-                                                          ),
-                                                        ),
-                                                        const SizedBox(
-                                                          width: 12,
-                                                        ),
-                                                        Expanded(
-                                                          child: Column(
-                                                            crossAxisAlignment:
-                                                                CrossAxisAlignment
-                                                                    .start,
-                                                            children: [
-                                                              Text(
-                                                                time,
-                                                                style: TextStyle(
-                                                                  fontSize: 16,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .bold,
-                                                                  color:
-                                                                      isTakenToday
-                                                                      ? AppColors
-                                                                            .textSecondaryStrong
-                                                                      : const Color(
-                                                                          0xFF00695C,
-                                                                        ),
-                                                                ),
+                                                              decoration: BoxDecoration(
+                                                                color:
+                                                                    isTakenToday
+                                                                    ? Colors
+                                                                          .green
+                                                                          .shade50
+                                                                    : const Color(
+                                                                        0xFFE0F2F1,
+                                                                      ),
+                                                                shape: BoxShape
+                                                                    .circle,
                                                               ),
-                                                              Row(
+                                                              child: Icon(
+                                                                medIcon,
+                                                                size: 24,
+                                                                color:
+                                                                    isTakenToday
+                                                                    ? Colors
+                                                                          .green
+                                                                    : const Color(
+                                                                        0xFF4DB6AC,
+                                                                      ),
+                                                              ),
+                                                            ),
+                                                            const SizedBox(
+                                                              width: 12,
+                                                            ),
+                                                            Expanded(
+                                                              child: Column(
+                                                                crossAxisAlignment:
+                                                                    CrossAxisAlignment
+                                                                        .start,
                                                                 children: [
-                                                                  if (isCritical)
-                                                                    Icon(
-                                                                      Icons
-                                                                          .warning_amber_rounded,
-                                                                      size: 18,
+                                                                  Text(
+                                                                    time,
+                                                                    style: TextStyle(
+                                                                      fontSize:
+                                                                          16,
+                                                                      fontWeight:
+                                                                          FontWeight
+                                                                              .bold,
                                                                       color:
                                                                           isTakenToday
                                                                           ? AppColors.textSecondaryStrong
-                                                                          : Colors.redAccent,
+                                                                          : const Color(
+                                                                              0xFF00695C,
+                                                                            ),
                                                                     ),
-                                                                  if (isCritical)
-                                                                    const SizedBox(
-                                                                      width: 4,
-                                                                    ),
-                                                                  Expanded(
-                                                                    child: Text(
-                                                                      medName,
-                                                                      style: GoogleFonts.poppins(
-                                                                        fontSize:
-                                                                            18,
-                                                                        fontWeight:
-                                                                            FontWeight.w700,
-                                                                        color:
-                                                                            isTakenToday
-                                                                            ? AppColors.textSecondaryStrong
-                                                                            : Colors.black87,
-                                                                        decoration:
-                                                                            isTakenToday
-                                                                            ? TextDecoration.lineThrough
-                                                                            : null,
+                                                                  ),
+                                                                  Row(
+                                                                    children: [
+                                                                      if (isCritical)
+                                                                        Icon(
+                                                                          Icons
+                                                                              .warning_amber_rounded,
+                                                                          size:
+                                                                              18,
+                                                                          color:
+                                                                              isTakenToday
+                                                                              ? AppColors.textSecondaryStrong
+                                                                              : Colors.redAccent,
+                                                                        ),
+                                                                      if (isCritical)
+                                                                        const SizedBox(
+                                                                          width:
+                                                                              4,
+                                                                        ),
+                                                                      Expanded(
+                                                                        child: Text(
+                                                                          medName,
+                                                                          style: GoogleFonts.poppins(
+                                                                            fontSize:
+                                                                                18,
+                                                                            fontWeight:
+                                                                                FontWeight.w700,
+                                                                            color:
+                                                                                isTakenToday
+                                                                                ? AppColors.textSecondaryStrong
+                                                                                : Colors.black87,
+                                                                            decoration:
+                                                                                isTakenToday
+                                                                                ? TextDecoration.lineThrough
+                                                                                : null,
+                                                                          ),
+                                                                          maxLines:
+                                                                              1,
+                                                                          overflow:
+                                                                              TextOverflow.ellipsis,
+                                                                        ),
                                                                       ),
-                                                                      maxLines:
-                                                                          1,
-                                                                      overflow:
-                                                                          TextOverflow
-                                                                              .ellipsis,
-                                                                    ),
+                                                                    ],
                                                                   ),
                                                                 ],
                                                               ),
-                                                              Text(
-                                                                doseInfo,
-                                                                style: const TextStyle(
-                                                                  fontSize: 16,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .w500,
-                                                                  // Tek renk: eskiden alındığında grey.shade400
-                                                                  // metin grey.shade100 kart zemininde neredeyse
-                                                                  // okunmuyordu (kontrast < 2:1). textSecondaryStrong
-                                                                  // hem beyaz hem grey.shade100 zeminde ~5:1+ verir.
-                                                                  color: AppColors
-                                                                      .textSecondaryStrong,
-                                                                ),
-                                                                maxLines: 1,
-                                                                overflow:
-                                                                    TextOverflow
-                                                                        .ellipsis,
-                                                              ),
-                                                            ],
-                                                          ),
-                                                        ),
-                                                        if (isTakenToday)
-                                                          // İlaç zaten alınmış: mevcut davranış korunuyor -
-                                                          // kompakt yeşil check ikonu, tekrar dokununca
-                                                          // "alınmadı"ya geri alınabiliyor (_toggleTaken iki
-                                                          // yönlü çalışıyor).
-                                                          IconButton(
-                                                            onPressed: () =>
-                                                                _toggleTaken(
-                                                                  medicine.id,
-                                                                  medName,
-                                                                  isTakenToday,
-                                                                  today,
-                                                                ),
-                                                            icon: const Icon(
-                                                              Icons
-                                                                  .check_circle,
-                                                              color:
-                                                                  Colors.green,
-                                                              size: 28,
                                                             ),
-                                                            padding:
-                                                                EdgeInsets.zero,
-                                                            constraints:
-                                                                const BoxConstraints(),
-                                                          )
-                                                        else
-                                                          // Alınmamış durum: eskiden belirsiz bir zil
-                                                          // ikonuydu (ne anlama geldiği net değildi) -
-                                                          // artık ikon + "İçtim" yazılı, hap şeklinde
-                                                          // kompakt bir buton. Min 48dp dokunma alanı
-                                                          // (SizedBox height: 48) korunuyor, ama tam
-                                                          // genişlik kaplamıyor - alt alta birden fazla
-                                                          // ilaç kartı olduğunda dikey yer israf etmiyor.
-                                                          Material(
-                                                            color: Colors
-                                                                .transparent,
-                                                            child: InkWell(
-                                                              onTap: () =>
-                                                                  _toggleTaken(
-                                                                    medicine.id,
-                                                                    medName,
-                                                                    isTakenToday,
-                                                                    today,
-                                                                  ),
-                                                              borderRadius:
-                                                                  BorderRadius.circular(
-                                                                    24,
-                                                                  ),
-                                                              child: Container(
-                                                                height: 48,
-                                                                padding:
-                                                                    const EdgeInsets.symmetric(
-                                                                      horizontal:
-                                                                          14,
+                                                            if (isTakenToday)
+                                                              // İlaç zaten alınmış: mevcut davranış korunuyor -
+                                                              // kompakt yeşil check ikonu, tekrar dokununca
+                                                              // "alınmadı"ya geri alınabiliyor (_toggleTaken iki
+                                                              // yönlü çalışıyor).
+                                                              IconButton(
+                                                                onPressed: () =>
+                                                                    _toggleTaken(
+                                                                      medicine
+                                                                          .id,
+                                                                      medName,
+                                                                      isTakenToday,
+                                                                      today,
                                                                     ),
-                                                                decoration: BoxDecoration(
-                                                                  color: const Color(
-                                                                    0xFF4DB6AC,
-                                                                  ),
+                                                                icon: const Icon(
+                                                                  Icons
+                                                                      .check_circle,
+                                                                  color: Colors
+                                                                      .green,
+                                                                  size: 28,
+                                                                ),
+                                                                padding:
+                                                                    EdgeInsets
+                                                                        .zero,
+                                                                constraints:
+                                                                    const BoxConstraints(),
+                                                              )
+                                                            else
+                                                              // Alınmamış durum: eskiden belirsiz bir zil
+                                                              // ikonuydu (ne anlama geldiği net değildi) -
+                                                              // artık ikon + "İçtim" yazılı, hap şeklinde
+                                                              // kompakt bir buton. Min 48dp dokunma alanı
+                                                              // (SizedBox height: 48) korunuyor, ama tam
+                                                              // genişlik kaplamıyor - alt alta birden fazla
+                                                              // ilaç kartı olduğunda dikey yer israf etmiyor.
+                                                              Material(
+                                                                color: Colors
+                                                                    .transparent,
+                                                                child: InkWell(
+                                                                  onTap: () =>
+                                                                      _toggleTaken(
+                                                                        medicine
+                                                                            .id,
+                                                                        medName,
+                                                                        isTakenToday,
+                                                                        today,
+                                                                      ),
                                                                   borderRadius:
                                                                       BorderRadius.circular(
                                                                         24,
                                                                       ),
-                                                                ),
-                                                                child: Row(
-                                                                  mainAxisSize:
-                                                                      MainAxisSize
-                                                                          .min,
-                                                                  children: [
-                                                                    const Icon(
-                                                                      Icons
-                                                                          .check,
-                                                                      color: Colors
-                                                                          .white,
-                                                                      size: 20,
+                                                                  child: Container(
+                                                                    height: 48,
+                                                                    padding: const EdgeInsets.symmetric(
+                                                                      horizontal:
+                                                                          14,
                                                                     ),
-                                                                    const SizedBox(
-                                                                      width: 6,
-                                                                    ),
-                                                                    Text(
-                                                                      "İçtim",
-                                                                      style: GoogleFonts.poppins(
-                                                                        color: Colors
-                                                                            .white,
-                                                                        fontSize:
-                                                                            15,
-                                                                        fontWeight:
-                                                                            FontWeight.w700,
+                                                                    decoration: BoxDecoration(
+                                                                      color: const Color(
+                                                                        0xFF4DB6AC,
                                                                       ),
+                                                                      borderRadius:
+                                                                          BorderRadius.circular(
+                                                                            24,
+                                                                          ),
                                                                     ),
-                                                                  ],
+                                                                    child: Row(
+                                                                      mainAxisSize:
+                                                                          MainAxisSize
+                                                                              .min,
+                                                                      children: [
+                                                                        const Icon(
+                                                                          Icons
+                                                                              .check,
+                                                                          color:
+                                                                              Colors.white,
+                                                                          size:
+                                                                              20,
+                                                                        ),
+                                                                        const SizedBox(
+                                                                          width:
+                                                                              6,
+                                                                        ),
+                                                                        Text(
+                                                                          "İçtim",
+                                                                          style: GoogleFonts.poppins(
+                                                                            color:
+                                                                                Colors.white,
+                                                                            fontSize:
+                                                                                15,
+                                                                            fontWeight:
+                                                                                FontWeight.w700,
+                                                                          ),
+                                                                        ),
+                                                                      ],
+                                                                    ),
+                                                                  ),
                                                                 ),
                                                               ),
-                                                            ),
+                                                          ],
+                                                        ),
+                                                        const SizedBox(
+                                                          height: 8,
+                                                        ),
+                                                        Text(
+                                                          doseInfo,
+                                                          style: const TextStyle(
+                                                            fontSize: 16,
+                                                            fontWeight:
+                                                                FontWeight.w500,
+                                                            // Tek renk: eskiden alındığında grey.shade400
+                                                            // metin grey.shade100 kart zemininde neredeyse
+                                                            // okunmuyordu (kontrast < 2:1). textSecondaryStrong
+                                                            // hem beyaz hem grey.shade100 zeminde ~5:1+ verir.
+                                                            color: AppColors
+                                                                .textSecondaryStrong,
                                                           ),
+                                                          maxLines: 1,
+                                                          overflow: TextOverflow
+                                                              .ellipsis,
+                                                        ),
                                                       ],
                                                     ),
                                                   ),
