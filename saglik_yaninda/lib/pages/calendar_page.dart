@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:saglik_yaninda/core/theme/app_colors.dart';
 
 class CalendarPage extends StatefulWidget {
   const CalendarPage({super.key});
@@ -234,10 +235,10 @@ class _CalendarPageState extends State<CalendarPage> {
                         formatButtonTextStyle: const TextStyle(
                           color: Color(0xFF4DB6AC),
                           fontWeight: FontWeight.bold,
-                          fontSize: 12,
+                          fontSize: 13,
                         ),
                         titleTextStyle: GoogleFonts.poppins(
-                          fontSize: 15,
+                          fontSize: 16,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -296,7 +297,7 @@ class _CalendarPageState extends State<CalendarPage> {
                                 Text(
                                   "${_selectedDay.day}.${_selectedDay.month}.${_selectedDay.year} Planı",
                                   style: GoogleFonts.poppins(
-                                    fontSize: 14,
+                                    fontSize: 16,
                                     fontWeight: FontWeight.bold,
                                     color: Colors.white,
                                   ),
@@ -315,7 +316,7 @@ class _CalendarPageState extends State<CalendarPage> {
                                     style: const TextStyle(
                                       color: Colors.white,
                                       fontWeight: FontWeight.bold,
-                                      fontSize: 10,
+                                      fontSize: 14,
                                     ),
                                   ),
                                 ),
@@ -337,9 +338,10 @@ class _CalendarPageState extends State<CalendarPage> {
                                     ? Center(
                                         child: Text(
                                           "Bugün için kayıtlı ilaç yok. 🍃",
-                                          style: TextStyle(
-                                            color: Colors.grey[400],
-                                            fontSize: 13,
+                                          style: const TextStyle(
+                                            color:
+                                                AppColors.textSecondaryStrong,
+                                            fontSize: 16,
                                           ),
                                         ),
                                       )
@@ -400,7 +402,7 @@ class _CalendarPageState extends State<CalendarPage> {
                                                       style: const TextStyle(
                                                         fontWeight:
                                                             FontWeight.bold,
-                                                        fontSize: 14,
+                                                        fontSize: 16,
                                                         color: Color(
                                                           0xFF00695C,
                                                         ),
@@ -435,7 +437,7 @@ class _CalendarPageState extends State<CalendarPage> {
                                                                   fontWeight:
                                                                       FontWeight
                                                                           .bold,
-                                                                  fontSize: 16,
+                                                                  fontSize: 18,
                                                                   color:
                                                                       isCritical
                                                                       ? Colors
@@ -452,10 +454,10 @@ class _CalendarPageState extends State<CalendarPage> {
                                                         ),
                                                         Text(
                                                           "${data['dose'] ?? ''} • ${data['hungerStatus'] ?? ''}",
-                                                          style: TextStyle(
-                                                            color: Colors
-                                                                .grey[500],
-                                                            fontSize: 12,
+                                                          style: const TextStyle(
+                                                            color: AppColors
+                                                                .textSecondaryStrong,
+                                                            fontSize: 16,
                                                           ),
                                                         ),
                                                       ],
