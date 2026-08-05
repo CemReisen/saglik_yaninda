@@ -459,16 +459,68 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  /// İlacın planlanan saatinden (hour/minute) şu ana kadar geçen dakika.
-  /// Henüz vakti gelmemişse negatif (ya da tam o dakikaysa sıfır) döner -
-  /// "Ertele" görünürlüğü gibi sadece GECİKME durumunu önemseyen kontroller
-  /// için `< eşikDeğer` karşılaştırması bu durumda da doğru sonucu verir
-  /// (negatif değerler her zaman herhangi bir pozitif eşiğin altında kalır).
-  int _minutesLate(int hour, int minute) {
+  /// İlacın gerçekte ne kadar gecikmiş olduğunu (dakika) hesaplar - sadece
+  /// "bugünün saat:dakikası" ile karşılaştırmıyor, repeatType/days'e göre
+  /// GERİYE DOĞRU en son PLANLI günü bulup o günün dozunun alınıp
+  /// alınmadığına bakıyor.
+  ///
+  /// Neden gerekli: basit bir "bugünün saati - şu anki saat" hesabı, gece
+  /// yarısını geçince yanlış sonuç verir. Ör. "Her Gün" tekrarlı, 23:00'e
+  /// planlı bir ilaç, gece 02:30'da böyle hesaplanırsa "henüz 1230 dakika
+  /// var" gibi görünür - oysa dünkü (hâlâ alınmamış) doz üzerinden sadece
+  /// 210 dakika geçmiştir. Sadece "dün"e bakmak da yetmez: "Belirli
+  /// Günler" programlarında (ör. Pzt/Çar/Cum) dün programda olmayabilir -
+  /// bu yüzden en son PLANLI günü (en fazla 7 gün geriye) arıyoruz.
+  ///
+  /// Bugünün (varsa) planlı saati henüz gelmemişse VE en son planlı günün
+  /// dozu zaten alınmışsa (lastTakenDate o günün tarihiyle eşleşiyorsa),
+  /// negatif döner ("henüz gecikme yok"). Aksi halde en son planlı günün
+  /// dozu üzerinden gerçek gecikme döner.
+  int _minutesLate(Map<String, dynamic> data) {
+    final int hour = data['hour'] ?? 0;
+    final int minute = data['minute'] ?? 0;
+    final String repeatType = data['repeatType'] ?? 'daily';
+    final List<String> days =
+        (data['days'] as List?)?.whereType<String>().toList() ?? [];
+    final String? lastTakenDate = data['lastTakenDate'] as String?;
+
+    bool isScheduledDay(DateTime day) {
+      if (repeatType == 'daily' || repeatType == 'Her Gün') return true;
+      return days.contains(NotificationService.weekDays[day.weekday - 1]);
+    }
+
     final DateTime now = DateTime.now();
-    final int currentMinutes = now.hour * 60 + now.minute;
-    final int medMinutes = hour * 60 + minute;
-    return currentMinutes - medMinutes;
+    for (int back = 0; back < 7; back++) {
+      final DateTime candidateDay = DateTime(
+        now.year,
+        now.month,
+        now.day,
+      ).subtract(Duration(days: back));
+      if (!isScheduledDay(candidateDay)) continue;
+
+      final DateTime occurrence = DateTime(
+        candidateDay.year,
+        candidateDay.month,
+        candidateDay.day,
+        hour,
+        minute,
+      );
+      if (occurrence.isAfter(now)) continue; // henüz gelmemiş, bu değil
+
+      final String occurrenceDateStr = DateFormat(
+        'yyyy-MM-dd',
+      ).format(candidateDay);
+      if (lastTakenDate == occurrenceDateStr) {
+        // En son planlı doz zaten alınmış - bugünün (varsa) dozu henüz
+        // gelmemiş demektir, gecikme yok.
+        return -1;
+      }
+      return now.difference(occurrence).inMinutes;
+    }
+    // 7 gün geriye gidildiği halde planlı bir gün bulunamadı - normalde
+    // olmamalı (todaysMedicines zaten bugünü planlı günler arasında
+    // filtreliyor), güvenli varsayılan: gecikme yok.
+    return -1;
   }
 
   /// "Ertele" butonu: ilacın mevcut günlük/haftalık alarm PROGRAMINA hiç
@@ -1479,11 +1531,7 @@ class _HomePageState extends State<HomePage> {
                                             // İçtim.
                                             final bool showErtele =
                                                 !isTakenToday &&
-                                                _minutesLate(
-                                                      data['hour'] ?? 0,
-                                                      data['minute'] ?? 0,
-                                                    ) <
-                                                    60;
+                                                _minutesLate(data) < 60;
                                             String time =
                                                 "${data['hour'].toString().padLeft(2, '0')}:${data['minute'].toString().padLeft(2, '0')}";
                                             String medName =
