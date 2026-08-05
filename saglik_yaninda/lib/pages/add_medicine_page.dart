@@ -7,6 +7,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:saglik_yaninda/main.dart';
 import 'package:saglik_yaninda/services/notification_service.dart';
+import 'package:saglik_yaninda/core/theme/app_colors.dart';
 
 class AddMedicinePage extends StatefulWidget {
   const AddMedicinePage({super.key});
@@ -595,7 +596,7 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
                 style: GoogleFonts.poppins(
                   color: const Color(0xFF00695C),
                   fontWeight: FontWeight.w600,
-                  fontSize: 12,
+                  fontSize: 16,
                 ),
               ),
             ),
@@ -694,8 +695,8 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
                         child: Text(
                           "Günleri Seçiniz:",
                           style: TextStyle(
-                            color: Colors.grey[700],
-                            fontSize: 12,
+                            color: AppColors.textSecondaryStrong,
+                            fontSize: 16,
                           ),
                         ),
                       ),
@@ -731,8 +732,8 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
                                     style: TextStyle(
                                       color: isSelected
                                           ? Colors.white
-                                          : Colors.grey[600],
-                                      fontSize: 12,
+                                          : AppColors.textSecondaryStrong,
+                                      fontSize: 14,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
@@ -785,7 +786,10 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
                       ),
                       subtitle: const Text(
                         "Önemli ilaçlar için.",
-                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: AppColors.textSecondaryStrong,
+                        ),
                       ),
                       value: _isCritical,
                       onChanged: (val) => setState(() => _isCritical = val),
@@ -1052,9 +1056,11 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
           Text(
             label,
             style: TextStyle(
-              fontSize: 12,
+              fontSize: 14,
               fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-              color: isSelected ? const Color(0xFF4DB6AC) : Colors.grey[600],
+              color: isSelected
+                  ? const Color(0xFF4DB6AC)
+                  : AppColors.textSecondaryStrong,
             ),
           ),
         ],
