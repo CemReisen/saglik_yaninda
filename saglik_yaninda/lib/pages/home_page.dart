@@ -1674,6 +1674,21 @@ class _HomePageState extends State<HomePage> {
                                                                 mainAxisSize:
                                                                     MainAxisSize
                                                                         .min,
+                                                                // Kök sebep: bu Column, Row'un
+                                                                // crossAxisAlignment.center'ı yüzünden
+                                                                // kendi içeriğinden (İçtim+Ertele)
+                                                                // daha fazla yükseklik alabiliyor
+                                                                // (satırın en yüksek çocuğu genelde
+                                                                // isim/saat bloğu oluyor) - varsayılan
+                                                                // mainAxisAlignment.start bu fazla
+                                                                // boşluğu tamamen ALTA (Ertele'den
+                                                                // sonraya) itiyordu, İçtim üstte
+                                                                // neredeyse boşluksuz duruyordu.
+                                                                // .center ile fazla boşluk üst/alta
+                                                                // eşit dağılıyor.
+                                                                mainAxisAlignment:
+                                                                    MainAxisAlignment
+                                                                        .center,
                                                                 crossAxisAlignment:
                                                                     CrossAxisAlignment
                                                                         .end,
