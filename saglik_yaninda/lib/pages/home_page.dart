@@ -38,9 +38,25 @@ class _HomePageState extends State<HomePage> {
   bool _relationsLoaded = false;
   StreamSubscription<QuerySnapshot>? _relationsSubscription;
 
+  // İlaç listesi altındaki zaman dilimi filtre çipleri (bkz. _buildPeriodChips).
+  // Sadece listenin GÖRÜNÜMÜNÜ filtreliyor - toplam sayaç, "Sıradaki İlaç"
+  // kartı ve gecikmiş-ilaç tespiti hep günün tamamına bakmaya devam ediyor.
+  static const List<String> _dayPeriods = ["Sabah", "Öğle", "Akşam", "Gece"];
+  late String _selectedPeriod;
+
+  /// Gece dilimi gece yarısını sarıyor (21:00-04:59), bu yüzden basit bir
+  /// aralık karşılaştırması yerine en/en az kontrolü gerekiyor.
+  String _periodForHour(int hour) {
+    if (hour >= 5 && hour < 12) return "Sabah";
+    if (hour >= 12 && hour < 17) return "Öğle";
+    if (hour >= 17 && hour < 21) return "Akşam";
+    return "Gece";
+  }
+
   @override
   void initState() {
     super.initState();
+    _selectedPeriod = _periodForHour(DateTime.now().hour);
     if (user != null) {
       _userStream = FirebaseFirestore.instance
           .collection('users')
@@ -1172,6 +1188,57 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  /// "İlaç Listesi" başlığının altındaki Sabah/Öğle/Akşam/Gece filtre
+  /// çipleri - sekme değil, aynı ekranda listeyi filtreleyen basit bir
+  /// seçim satırı. 4 çip Expanded ile eşit genişlikte paylaşılıyor.
+  Widget _buildPeriodChips() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 22),
+      child: Row(
+        children: List.generate(_dayPeriods.length, (index) {
+          final String period = _dayPeriods[index];
+          final bool isSelected = period == _selectedPeriod;
+          return Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(
+                right: index == _dayPeriods.length - 1 ? 0 : 8,
+              ),
+              child: GestureDetector(
+                onTap: () => setState(() => _selectedPeriod = period),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding: const EdgeInsets.symmetric(vertical: 9),
+                  decoration: BoxDecoration(
+                    color: isSelected ? AppColors.primary : Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: isSelected
+                          ? AppColors.primary
+                          : AppColors.primary.withOpacity(0.4),
+                      width: 1.2,
+                    ),
+                  ),
+                  child: Center(
+                    child: Text(
+                      period,
+                      style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: isSelected
+                            ? Colors.white
+                            : AppColors.textSecondaryStrong,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        }),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (user == null) return const Center(child: Text("Giriş Yapılmalı"));
@@ -1282,6 +1349,17 @@ class _HomePageState extends State<HomePage> {
                   int totalCount = todaysMedicines.length;
                   var nextMedDoc = _getNextMedicine(todaysMedicines, today);
 
+                  // Seçili zaman dilimine göre SADECE listenin görünümü
+                  // filtreleniyor - totalCount/nextMedDoc bilinçli olarak
+                  // yukarıdaki (filtresiz) todaysMedicines'a bakmaya devam
+                  // ediyor (bkz. _selectedPeriod alanındaki not).
+                  final List<QueryDocumentSnapshot> filteredMedicines =
+                      todaysMedicines.where((doc) {
+                        final data = doc.data() as Map<String, dynamic>;
+                        return _periodForHour(data['hour'] ?? 0) ==
+                            _selectedPeriod;
+                      }).toList();
+
                   return Column(
                     children: [
                       _buildHeader(firstName),
@@ -1345,7 +1423,9 @@ class _HomePageState extends State<HomePage> {
                                   ],
                                 ),
                               ),
-                              const SizedBox(height: 2),
+                              const SizedBox(height: 8),
+                              _buildPeriodChips(),
+                              const SizedBox(height: 8),
 
                               Expanded(
                                 child: ClipRRect(
@@ -1353,21 +1433,25 @@ class _HomePageState extends State<HomePage> {
                                     bottomLeft: Radius.circular(30),
                                     bottomRight: Radius.circular(30),
                                   ),
-                                  child: todaysMedicines.isEmpty
-                                      ? const Center(
+                                  child: filteredMedicines.isEmpty
+                                      ? Center(
                                           child: Text(
-                                            "Bugünlük ilaç yok!",
-                                            style: TextStyle(fontSize: 16),
+                                            todaysMedicines.isEmpty
+                                                ? "Bugünlük ilaç yok!"
+                                                : "$_selectedPeriod diliminde ilacın yok",
+                                            style: const TextStyle(
+                                              fontSize: 16,
+                                            ),
                                           ),
                                         )
                                       : ListView.builder(
                                           padding: const EdgeInsets.symmetric(
                                             horizontal: 14,
                                           ),
-                                          itemCount: todaysMedicines.length,
+                                          itemCount: filteredMedicines.length,
                                           itemBuilder: (context, index) {
                                             var medicine =
-                                                todaysMedicines[index];
+                                                filteredMedicines[index];
                                             var data =
                                                 medicine.data()
                                                     as Map<String, dynamic>;
