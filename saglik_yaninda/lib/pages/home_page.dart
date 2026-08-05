@@ -459,6 +459,18 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  /// İlacın planlanan saatinden (hour/minute) şu ana kadar geçen dakika.
+  /// Henüz vakti gelmemişse negatif (ya da tam o dakikaysa sıfır) döner -
+  /// "Ertele" görünürlüğü gibi sadece GECİKME durumunu önemseyen kontroller
+  /// için `< eşikDeğer` karşılaştırması bu durumda da doğru sonucu verir
+  /// (negatif değerler her zaman herhangi bir pozitif eşiğin altında kalır).
+  int _minutesLate(int hour, int minute) {
+    final DateTime now = DateTime.now();
+    final int currentMinutes = now.hour * 60 + now.minute;
+    final int medMinutes = hour * 60 + minute;
+    return currentMinutes - medMinutes;
+  }
+
   /// "Ertele" butonu: ilacın mevcut günlük/haftalık alarm PROGRAMINA hiç
   /// dokunmuyor (yarının/sıradaki günün hatırlatması olduğu gibi kalır) -
   /// sadece şu andan 15 dakika sonrasına GERÇEK TEK SEFERLİK, ekstra bir
@@ -1459,6 +1471,19 @@ class _HomePageState extends State<HomePage> {
                                                 data['lastTakenDate'] == today;
                                             bool isCritical =
                                                 data['isCritical'] ?? false;
+                                            // "Ertele" (+15dk) sadece 1 saatten az
+                                            // gecikmiş (ya da henüz vakti gelmemiş)
+                                            // ilaçlar için mantıklı - 1+ saat
+                                            // gecikmiş bir ilacı 15dk ertelemek
+                                            // anlamsız, o noktada tek makul aksiyon
+                                            // İçtim.
+                                            final bool showErtele =
+                                                !isTakenToday &&
+                                                _minutesLate(
+                                                      data['hour'] ?? 0,
+                                                      data['minute'] ?? 0,
+                                                    ) <
+                                                    60;
                                             String time =
                                                 "${data['hour'].toString().padLeft(2, '0')}:${data['minute'].toString().padLeft(2, '0')}";
                                             String medName =
@@ -1867,7 +1892,7 @@ class _HomePageState extends State<HomePage> {
                                                                         .ellipsis,
                                                               ),
                                                             ),
-                                                            if (!isTakenToday) ...[
+                                                            if (showErtele) ...[
                                                               const SizedBox(
                                                                 width: 8,
                                                               ),
