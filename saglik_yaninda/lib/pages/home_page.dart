@@ -3,13 +3,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:saglik_yaninda/services/notification_service.dart';
 import 'package:intl/intl.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:connectivity_plus/connectivity_plus.dart'; // 🔥 YENİ: İNTERNET KONTROL PAKETİ
 import 'package:saglik_yaninda/core/theme/app_colors.dart';
+import 'package:saglik_yaninda/widgets/edit_medicine_dialog.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -523,317 +523,6 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  void _showEditDialog(Map<String, dynamic> data, String docId) {
-    TextEditingController nameCtrl = TextEditingController(text: data['name']);
-    TextEditingController doseCtrl = TextEditingController(text: data['dose']);
-    TextEditingController descCtrl = TextEditingController(
-      text: data['description'],
-    );
-    TimeOfDay selectedTime = TimeOfDay(
-      hour: data['hour'],
-      minute: data['minute'],
-    );
-    String selectedHunger = data['hungerStatus'] ?? "Tok Karnına";
-    bool isCritical = data['isCritical'] ?? false;
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setStateDialog) => AlertDialog(
-          backgroundColor: Colors.white,
-          surfaceTintColor: Colors.transparent,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(25),
-          ),
-          title: const Row(
-            children: [
-              Icon(Icons.edit_note, color: Color(0xFF4DB6AC), size: 28),
-              SizedBox(width: 10),
-              Text(
-                "İlacı Düzenle",
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ],
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: nameCtrl,
-                  cursorColor: const Color(0xFF4DB6AC),
-                  decoration: const InputDecoration(
-                    labelText: "İlaç Adı",
-                    labelStyle: TextStyle(color: Colors.grey),
-                    focusedBorder: UnderlineInputBorder(
-                      borderSide: BorderSide(color: Color(0xFF4DB6AC)),
-                    ),
-                    prefixIcon: Icon(
-                      Icons.medication,
-                      color: Color(0xFF4DB6AC),
-                    ),
-                  ),
-                ),
-                TextField(
-                  controller: doseCtrl,
-                  cursorColor: const Color(0xFF4DB6AC),
-                  decoration: const InputDecoration(
-                    labelText: "Doz",
-                    labelStyle: TextStyle(color: Colors.grey),
-                    focusedBorder: UnderlineInputBorder(
-                      borderSide: BorderSide(color: Color(0xFF4DB6AC)),
-                    ),
-                    prefixIcon: Icon(
-                      Icons.local_pharmacy,
-                      color: Color(0xFF4DB6AC),
-                    ),
-                  ),
-                ),
-                TextField(
-                  controller: descCtrl,
-                  cursorColor: const Color(0xFF4DB6AC),
-                  decoration: const InputDecoration(
-                    labelText: "Notlar",
-                    labelStyle: TextStyle(color: Colors.grey),
-                    focusedBorder: UnderlineInputBorder(
-                      borderSide: BorderSide(color: Color(0xFF4DB6AC)),
-                    ),
-                    prefixIcon: Icon(Icons.notes, color: Color(0xFF4DB6AC)),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      "Kullanım Şekli",
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: AppColors.textSecondaryStrong,
-                      ),
-                    ),
-                    DropdownButton<String>(
-                      value: selectedHunger,
-                      isExpanded: true,
-                      dropdownColor: Colors.white,
-                      icon: const Icon(
-                        Icons.keyboard_arrow_down,
-                        color: Color(0xFF4DB6AC),
-                      ),
-                      style: const TextStyle(
-                        color: Colors.black87,
-                        fontSize: 16,
-                      ),
-                      underline: Container(
-                        height: 2,
-                        color: const Color(0xFF4DB6AC),
-                      ),
-                      items: ["Tok Karnına", "Aç Karnına", "Farketmez"].map((
-                        val,
-                      ) {
-                        return DropdownMenuItem(
-                          value: val,
-                          child: Text(
-                            val,
-                            style: TextStyle(
-                              color: val == selectedHunger
-                                  ? const Color(0xFF4DB6AC)
-                                  : Colors.black87,
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                      onChanged: (val) =>
-                          setStateDialog(() => selectedHunger = val!),
-                    ),
-                  ],
-                ),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  activeColor: const Color(0xFF4DB6AC),
-                  title: const Text(
-                    "Kritik İlaç",
-                    style: TextStyle(fontWeight: FontWeight.w500),
-                  ),
-                  value: isCritical,
-                  onChanged: (val) => setStateDialog(() => isCritical = val),
-                ),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(
-                    "Saat: ${selectedTime.format(context)}",
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  trailing: TextButton(
-                    onPressed: () async {
-                      final picked = await showTimePicker(
-                        context: context,
-                        initialTime: selectedTime,
-                        builder: (context, child) {
-                          return Theme(
-                            data: Theme.of(context).copyWith(
-                              colorScheme: const ColorScheme.light(
-                                primary: Color(0xFF4DB6AC),
-                                onPrimary: Colors.white,
-                                onSurface: Colors.black87,
-                              ),
-                            ),
-                            child: child!,
-                          );
-                        },
-                      );
-                      if (picked != null)
-                        setStateDialog(() => selectedTime = picked);
-                    },
-                    child: const Text(
-                      "Değiştir",
-                      style: TextStyle(
-                        color: Color(0xFF4DB6AC),
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text(
-                "İptal",
-                style: TextStyle(
-                  color: Colors.grey,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF4DB6AC),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              onPressed: () async {
-                // 🔥 Saat değiştiyse eski OS alarmları hâlâ eski saatte
-                // çalar — önce eskilerini iptal edip, tamamlandığından emin
-                // olduktan SONRA yenilerini kuruyoruz. Yeni id'ler artık
-                // NotificationService.generateUniqueId ile cihazdaki pending
-                // alarmlara bakılarak üretiliyor; eskiler burada zaten iptal
-                // edildiği için onlarla çakışma riski yok.
-                final List<int> oldNotificationIds =
-                    NotificationService.extractNotificationIds(data);
-                await NotificationService.cancelNotifications(
-                  oldNotificationIds,
-                );
-
-                final String medName = nameCtrl.text.trim();
-                final String medDose = doseCtrl.text.trim();
-                final String notificationType =
-                    data['notificationType'] ?? "Standart";
-                final String repeatType = data['repeatType'] ?? "daily";
-                final List<String> days =
-                    (data['days'] as List?)?.whereType<String>().toList() ?? [];
-                final DateTime? endDate = NotificationService.parseDdMmYyyy(
-                  data['endDate'] as String?,
-                );
-                final DateTime now = DateTime.now();
-                final DateTime todayOnly = DateTime(
-                  now.year,
-                  now.month,
-                  now.day,
-                );
-                final bool alreadyExpired =
-                    endDate != null && endDate.isBefore(todayOnly);
-
-                final List<int> newNotificationIds = [];
-
-                if (!alreadyExpired) {
-                  if (repeatType == "daily") {
-                    final int id = await NotificationService.generateUniqueId(
-                      exclude: newNotificationIds,
-                    );
-                    DateTime scheduledDate = DateTime(
-                      now.year,
-                      now.month,
-                      now.day,
-                      selectedTime.hour,
-                      selectedTime.minute,
-                    );
-                    if (scheduledDate.isBefore(now)) {
-                      scheduledDate = scheduledDate.add(
-                        const Duration(days: 1),
-                      );
-                    }
-                    await NotificationService.scheduleNotification(
-                      id: id,
-                      title: "İlaç Vakti: $medName",
-                      body: "$medDose - $selectedHunger",
-                      scheduledDate: scheduledDate,
-                      notificationType: notificationType,
-                    );
-                    newNotificationIds.add(id);
-                  } else {
-                    for (final dayName in days) {
-                      final int dayIndex = NotificationService.weekDays.indexOf(
-                        dayName,
-                      );
-                      if (dayIndex == -1) continue;
-                      final int id = await NotificationService.generateUniqueId(
-                        exclude: newNotificationIds,
-                      );
-                      final DateTime scheduledDate =
-                          NotificationService.nextInstanceOfWeekdayTime(
-                            dayIndex + 1,
-                            selectedTime,
-                          );
-                      await NotificationService.scheduleNotification(
-                        id: id,
-                        title: "İlaç Vakti: $medName",
-                        body: "$medDose - $selectedHunger",
-                        scheduledDate: scheduledDate,
-                        notificationType: notificationType,
-                        matchDateTimeComponents:
-                            DateTimeComponents.dayOfWeekAndTime,
-                      );
-                      newNotificationIds.add(id);
-                    }
-                  }
-                }
-
-                await FirebaseFirestore.instance
-                    .collection('users')
-                    .doc(user!.uid)
-                    .collection('medicines')
-                    .doc(docId)
-                    .update({
-                      'name': medName,
-                      'dose': medDose,
-                      'description': descCtrl.text.trim(),
-                      'hungerStatus': selectedHunger,
-                      'isCritical': isCritical,
-                      'hour': selectedTime.hour,
-                      'minute': selectedTime.minute,
-                      'notificationIds': newNotificationIds,
-                      'notificationsCancelled': alreadyExpired,
-                    });
-                Navigator.pop(context);
-                Navigator.pop(context);
-              },
-              child: const Text(
-                "Kaydet",
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   void _showMedicineDetails(Map<String, dynamic> data, String docId) {
     String name = data['name'] ?? 'İsimsiz İlaç';
     bool isCritical = data['isCritical'] ?? false;
@@ -975,7 +664,18 @@ class _HomePageState extends State<HomePage> {
                 ),
                 const SizedBox(width: 25),
                 InkWell(
-                  onTap: () => _showEditDialog(data, docId),
+                  onTap: () {
+                    // Ortak edit dialog'u kendi açılış/kapanışını yönetiyor
+                    // (tek pop) - burası önce KENDİ dialog'unu (bu detay
+                    // dialog'u) kapatmalı, aksi halde altında açık kalır.
+                    Navigator.pop(context);
+                    showEditMedicineDialog(
+                      context: context,
+                      data: data,
+                      docId: docId,
+                      uid: user!.uid,
+                    );
+                  },
                   child: const Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
