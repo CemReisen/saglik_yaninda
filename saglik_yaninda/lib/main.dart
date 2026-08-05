@@ -143,13 +143,16 @@ void main() async {
   FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
-    FirebaseFirestore.instance.collection('users').doc(uid).update({
-      'fcmToken': newToken,
-    }).then((_) {
-      debugPrint("🔄 FCM token refresh sonrası güncellendi (uid: $uid).");
-    }).catchError((e) {
-      debugPrint("⚠️ FCM token refresh güncellemesi başarısız: $e");
-    });
+    FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .update({'fcmToken': newToken})
+        .then((_) {
+          debugPrint("🔄 FCM token refresh sonrası güncellendi (uid: $uid).");
+        })
+        .catchError((e) {
+          debugPrint("⚠️ FCM token refresh güncellemesi başarısız: $e");
+        });
   });
 
   FirebaseMessaging.onMessage.listen((RemoteMessage message) {
