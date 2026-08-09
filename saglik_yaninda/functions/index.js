@@ -165,6 +165,128 @@ exports.resolveConnectionCode = onCall(async (request) => {
   };
 });
 
+// --- recoverWithCode --------------------------------------------------------
+//
+// Hızlı Başla (anonim) hesaplar için kurtarma akışı: kullanıcı yeni bir
+// cihazda/kurulumda "Kodum var" deyip connectionCode'unu girer, bu fonksiyon
+// doğrulayıp bir custom token üretir — client bu token ile
+// signInWithCustomToken() çağırıp AYNI hesaba (aynı uid, aynı ilaç geçmişi,
+// aynı caregiver bağlantısı) geri döner (bkz. PRODUCT_NOTES_AUTH_UPDATE.md).
+//
+// resolveConnectionCode'dan (aynı users.connectionCode alanını sorguluyor)
+// KASITLI OLARAK AYRI bir fonksiyon — amaçları tamamen farklı: resolveConnectionCode
+// salt-okunur {elderId, elderName} döner ve oturum açtırmaz, uid bazlı rate
+// limit yeterli (çağıran zaten giriş yapmış olmalı). Burada kod, fiilen bir
+// hesaba GİRİŞ YETKİSİ veriyor (şifre gibi davranıyor) VE çağıran henüz hiç
+// giriş yapmamış olabilir — bu yüzden:
+//   - request.auth ZORUNLU DEĞİL (resolveConnectionCode'un aksine).
+//   - uid bazlı değil, KODUN KENDİSİ bazlı rate limit kullanılıyor (henüz
+//     uid yok — çağıranı ayırt edecek başka güvenilir bir kimlik de yok).
+//   - Sadece authProvider == "anonymous" kullanıcılar hedeflenebiliyor —
+//     email/Google hesapları zaten kendi yöntemleriyle giriş yapabiliyor,
+//     bir "kod" ile de ele geçirilebilir olmamalı.
+//   - Hata mesajı KASITLI OLARAK GENERİK: "kod hiç yok" ile "kod var ama
+//     anonim değil" arasında fark göstermiyor — saldırgana enumeration/
+//     oracle bilgisi sızdırmasın.
+
+const RECOVERY_RATE_LIMIT_MAX_ATTEMPTS = 5;
+const RECOVERY_RATE_LIMIT_WINDOW_MS = 5 * 60 * 1000; // 5 dakika
+
+/**
+ * resolveConnectionCode'daki checkAndConsumeRateLimit ile aynı sabit-pencere
+ * deseni, ama uid yerine KODUN KENDİSİ anahtar olarak kullanılıyor. Bu, aynı
+ * zamanda TEK BİR kodu hedef alan tekrarlı denemelere karşı doğrudan koruma
+ * sağlıyor: kod alanı 36^6 ≈ 2,1 milyar olduğu için rastgele tarama zaten
+ * pratik değil, asıl risk bilinen/tahmin edilen TEK bir kod üzerinde deneme —
+ * bu limit tam onu hedefliyor.
+ */
+async function checkAndConsumeRecoveryRateLimit(code) {
+  const ref = admin
+    .firestore()
+    .collection("rate_limits")
+    .doc(`recoverWithCode_${code}`);
+
+  return admin.firestore().runTransaction(async (tx) => {
+    const doc = await tx.get(ref);
+    const now = Date.now();
+
+    if (!doc.exists) {
+      tx.set(ref, { count: 1, windowStart: now });
+      return true;
+    }
+
+    const data = doc.data();
+    const windowStart = data.windowStart || 0;
+    const count = data.count || 0;
+
+    if (now - windowStart > RECOVERY_RATE_LIMIT_WINDOW_MS) {
+      tx.set(ref, { count: 1, windowStart: now });
+      return true;
+    }
+
+    if (count >= RECOVERY_RATE_LIMIT_MAX_ATTEMPTS) {
+      return false;
+    }
+
+    tx.update(ref, { count: count + 1 });
+    return true;
+  });
+}
+
+exports.recoverWithCode = onCall(async (request) => {
+  const code = (request.data && request.data.code
+    ? String(request.data.code)
+    : ""
+  )
+    .trim()
+    .toUpperCase();
+
+  if (!code) {
+    throw new HttpsError("invalid-argument", "Kod boş olamaz.");
+  }
+
+  const allowed = await checkAndConsumeRecoveryRateLimit(code);
+  if (!allowed) {
+    throw new HttpsError(
+      "resource-exhausted",
+      "Çok fazla deneme yapıldı. Lütfen birkaç dakika sonra tekrar deneyin."
+    );
+  }
+
+  const snap = await admin
+    .firestore()
+    .collection("users")
+    .where("connectionCode", "==", code)
+    .where("authProvider", "==", "anonymous")
+    .limit(1)
+    .get();
+
+  // Kasıtlı olarak GENERİK hata — bkz. yukarıdaki fonksiyon açıklaması.
+  // Client'a ASLA sızdırılmıyor, ama functions log'una (logger.warn) düşüyor —
+  // rate limit'e hiç takılmayan (ör. dakikada 1-2 kez, farklı kodlarla) düşük
+  // hacimli ama anormal bir deneme paterni ileride log tabanlı bir alarm/
+  // izlemeyle fark edilebilsin diye ucuz bir hazırlık. Kodun TAMAMINI
+  // loglamıyoruz (production log'larında dursun istemiyoruz) — sadece son 3
+  // karakteri, teşhis için yeterli ama tüm kodu ifşa etmiyor.
+  if (snap.empty) {
+    logger.warn(
+      `recoverWithCode: kod bulunamadı/anonim değil (...${code.slice(-3)})`
+    );
+    throw new HttpsError(
+      "not-found",
+      "Kod geçersiz. Lütfen kodu kontrol edip tekrar deneyin."
+    );
+  }
+
+  const uid = snap.docs[0].id;
+  const customToken = await admin.auth().createCustomToken(uid);
+
+  // Sadece token döner — resolveConnectionCode'daki "başka hiçbir alan
+  // sızdırılmaz" prensibiyle tutarlı, burada da isim/email vb. dönülmüyor;
+  // client zaten signInWithCustomToken() sonrası kendi profiline erişecek.
+  return { customToken };
+});
+
 exports.onNotificationRequestCreated = onDocumentCreated(
   "notification_requests/{requestId}",
   async (event) => {
