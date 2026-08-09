@@ -9,7 +9,7 @@ android {
     namespace = "com.example.saglik_yaninda"
     compileSdk = 36
     defaultConfig {
-        applicationId = "com.example.saglik_yaninda"
+        applicationId = "com.cemreisen.saglikyaninda"
         minSdk = flutter.minSdkVersion
         targetSdk = 36
         versionCode = 1
