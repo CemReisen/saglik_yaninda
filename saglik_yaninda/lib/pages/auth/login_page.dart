@@ -165,6 +165,15 @@ class _LoginPageState extends State<LoginPage> {
           .doc(user.uid);
       final userDoc = await userRef.get();
 
+      // Firebase'in signInWithCredential sonrası döndürdüğü User.displayName,
+      // yalnızca idToken geçirilen credential'larda güvenilir şekilde
+      // dolmuyor (gözlemlendi: yeni oluşan hesapta null kalabiliyor).
+      // googleUser.displayName paketten doğrudan geliyor, kaynağı daha
+      // güvenilir - önce onu deniyoruz, sadece o da null ise Firebase'e
+      // düşüyoruz.
+      final String googleDisplayName =
+          googleUser.displayName ?? user.displayName ?? '';
+
       String role;
       if (!userDoc.exists) {
         final selectedRole = await _askRoleForNewGoogleUser();
@@ -177,8 +186,8 @@ class _LoginPageState extends State<LoginPage> {
         role = selectedRole;
         await userRef.set({
           'uid': user.uid,
-          'name': user.displayName ?? '',
-          'email': user.email ?? '',
+          'name': googleDisplayName,
+          'email': googleUser.email,
           'role': role,
           'connectionCode': _generateConnectionCode(),
           'authProvider': 'google',
@@ -187,6 +196,27 @@ class _LoginPageState extends State<LoginPage> {
       } else {
         final data = userDoc.data() as Map<String, dynamic>;
         role = data['role'] ?? 'elder';
+
+        // Var olan dokümanda connectionCode/name/authProvider eksikse
+        // (ör. daha önceki bir kayıt bu alanları hiç yazmadan oluşmuşsa)
+        // burada tamamlıyoruz - connectionCode artık Hızlı Başla'da kurtarma
+        // kodu olarak da kullanılacağı için HER authProvider'da dolu olması
+        // gereken bir alan, "sadece register akışında yazılır" varsayımına
+        // güvenilemez.
+        final Map<String, dynamic> backfill = {};
+        if ((data['connectionCode'] as String?)?.isEmpty ?? true) {
+          backfill['connectionCode'] = _generateConnectionCode();
+        }
+        if (((data['name'] as String?)?.isEmpty ?? true) &&
+            googleDisplayName.isNotEmpty) {
+          backfill['name'] = googleDisplayName;
+        }
+        if (data['authProvider'] == null) {
+          backfill['authProvider'] = 'google';
+        }
+        if (backfill.isNotEmpty) {
+          await userRef.update(backfill);
+        }
       }
 
       await _saveDeviceToken(user.uid);
