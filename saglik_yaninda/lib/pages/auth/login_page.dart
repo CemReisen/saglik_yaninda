@@ -1,4 +1,3 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -8,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:saglik_yaninda/core/app_navigator_key.dart';
+import 'package:saglik_yaninda/services/connection_code_service.dart';
 
 // Google'ın standart çok renkli "G" logosu — asset dosyası eklemeden ya da ağ
 // isteği atmadan (favicon vb.) doğrudan gömülü SVG olarak render ediliyor.
@@ -86,15 +86,6 @@ class _LoginPageState extends State<LoginPage> {
     } catch (e) {
       print("⚠️ FCM Token alınamadı: $e");
     }
-  }
-
-  String _generateConnectionCode() {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    Random rnd = Random();
-    String code = String.fromCharCodes(
-      Iterable.generate(6, (_) => chars.codeUnitAt(rnd.nextInt(chars.length))),
-    );
-    return "${code.substring(0, 3)}-${code.substring(3, 6)}";
   }
 
   // Google ile ilk kez giriş yapan bir kullanıcı için rol soruyor (register
@@ -203,7 +194,7 @@ class _LoginPageState extends State<LoginPage> {
           'name': googleDisplayName,
           'email': googleUser.email,
           'role': role,
-          'connectionCode': _generateConnectionCode(),
+          'connectionCode': ConnectionCodeService.generate(),
           'authProvider': 'google',
           'createdAt': FieldValue.serverTimestamp(),
         });
@@ -219,7 +210,7 @@ class _LoginPageState extends State<LoginPage> {
         // güvenilemez.
         final Map<String, dynamic> backfill = {};
         if ((data['connectionCode'] as String?)?.isEmpty ?? true) {
-          backfill['connectionCode'] = _generateConnectionCode();
+          backfill['connectionCode'] = ConnectionCodeService.generate();
         }
         if (((data['name'] as String?)?.isEmpty ?? true) &&
             googleDisplayName.isNotEmpty) {
@@ -409,6 +400,83 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                 ),
                 const SizedBox(height: 40),
+
+                // Hızlı Başla — BİRİNCİL yöntem: yaşlı kullanıcı hedef
+                // kitlesi için e-posta/Google'dan önce geliyor (bkz.
+                // PRODUCT_NOTES_AUTH_UPDATE.md). Ayrı bir route olarak push
+                // ediliyor (bkz. quick_start_page.dart'taki not) - Google
+                // akışındaki context/dispose riskine burada gerek yok.
+                SizedBox(
+                  width: double.infinity,
+                  height: 55,
+                  child: ElevatedButton.icon(
+                    onPressed: () =>
+                        Navigator.pushNamed(context, '/quick_start'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: mainGreen,
+                      elevation: 2,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    icon: const Icon(
+                      Icons.rocket_launch_rounded,
+                      color: Colors.white,
+                    ),
+                    label: Text(
+                      "HIZLI BAŞLA",
+                      style: GoogleFonts.poppins(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  "Sadece adınızı yazarak hemen başlayın",
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    color: Colors.grey[600],
+                  ),
+                ),
+                const SizedBox(height: 4),
+                GestureDetector(
+                  onTap: () =>
+                      Navigator.pushNamed(context, '/recovery_code'),
+                  child: Text(
+                    "Kodum var",
+                    style: GoogleFonts.poppins(
+                      color: mainGreen,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      decoration: TextDecoration.underline,
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 24),
+
+                Row(
+                  children: [
+                    Expanded(child: Divider(color: Colors.grey.shade300)),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Text(
+                        "veya",
+                        style: GoogleFonts.poppins(
+                          color: Colors.grey[500],
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                    Expanded(child: Divider(color: Colors.grey.shade300)),
+                  ],
+                ),
+
+                const SizedBox(height: 24),
 
                 _buildCard(
                   label: "E-posta",

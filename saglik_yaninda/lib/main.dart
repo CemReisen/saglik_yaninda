@@ -17,6 +17,8 @@ import 'package:saglik_yaninda/pages/profile_page.dart';
 import 'package:saglik_yaninda/pages/auth/forgot_password_page.dart';
 import 'package:saglik_yaninda/pages/auth/login_page.dart';
 import 'package:saglik_yaninda/pages/auth/register_page.dart';
+import 'package:saglik_yaninda/pages/auth/quick_start_page.dart';
+import 'package:saglik_yaninda/pages/auth/recovery_code_page.dart';
 import 'package:saglik_yaninda/services/notification_service.dart';
 import 'package:saglik_yaninda/pages/caregiver/caregiver_home_page.dart';
 import 'core/theme/app_theme.dart';
@@ -249,6 +251,8 @@ class SaglikYanindaApp extends StatelessWidget {
         '/login': (context) => const LoginPage(),
         '/register': (context) => const RegisterPage(),
         '/forgot_password': (context) => const ForgotPasswordPage(),
+        '/quick_start': (context) => const QuickStartPage(),
+        '/recovery_code': (context) => const RecoveryCodePage(),
       },
     );
   }

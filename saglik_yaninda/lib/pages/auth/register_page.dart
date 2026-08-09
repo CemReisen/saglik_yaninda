@@ -3,7 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'dart:math';
+import 'package:saglik_yaninda/services/connection_code_service.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -47,15 +47,6 @@ class _RegisterPageState extends State<RegisterPage> {
     }
   }
 
-  String _generateConnectionCode() {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    Random rnd = Random();
-    String code = String.fromCharCodes(
-      Iterable.generate(6, (_) => chars.codeUnitAt(rnd.nextInt(chars.length))),
-    );
-    return "${code.substring(0, 3)}-${code.substring(3, 6)}";
-  }
-
   Future<void> _register() async {
     final name = _nameController.text.trim();
     final email = _emailController.text.trim();
@@ -93,7 +84,7 @@ class _RegisterPageState extends State<RegisterPage> {
 
       String? token = await FirebaseMessaging.instance.getToken();
       String uid = userCredential.user!.uid;
-      String connectionCode = _generateConnectionCode();
+      String connectionCode = ConnectionCodeService.generate();
 
       await FirebaseFirestore.instance.collection("users").doc(uid).set({
         "uid": uid,
