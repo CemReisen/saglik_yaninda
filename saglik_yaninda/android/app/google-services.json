@@ -7,12 +7,25 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:308628032795:android:e5cb96a23829c85e5357be",
+        "mobilesdk_app_id": "1:308628032795:android:a9901b48ce02b4445357be",
         "android_client_info": {
-          "package_name": "com.example.saglik_yaninda"
+          "package_name": "com.cemreisen.saglikyaninda"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "308628032795-k68q6thg6dle3o8tbc4espmjb9r9qtef.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.cemreisen.saglikyaninda",
+            "certificate_hash": "99a386bd6dbd6a2110ad400fab575d66321237b3"
+          }
+        },
+        {
+          "client_id": "308628032795-gc0cva54oiujgvf7b9mcf0mfi2fjg0r1.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyBBsPdBBnidW4fbtU0rhFh6OZBGSkk9aJE"
@@ -20,7 +33,55 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "308628032795-gc0cva54oiujgvf7b9mcf0mfi2fjg0r1.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "308628032795-ttbmhqk753ffb58pjj6d4tq63n4p8mfh.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.saglikYaninda"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:308628032795:android:e5cb96a23829c85e5357be",
+        "android_client_info": {
+          "package_name": "com.example.saglik_yaninda"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "308628032795-gc0cva54oiujgvf7b9mcf0mfi2fjg0r1.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBBsPdBBnidW4fbtU0rhFh6OZBGSkk9aJE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "308628032795-gc0cva54oiujgvf7b9mcf0mfi2fjg0r1.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "308628032795-ttbmhqk753ffb58pjj6d4tq63n4p8mfh.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.saglikYaninda"
+              }
+            }
+          ]
         }
       }
     }

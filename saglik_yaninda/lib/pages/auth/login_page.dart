@@ -1,9 +1,28 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+
+// Google'ın standart çok renkli "G" logosu — asset dosyası eklemeden ya da ağ
+// isteği atmadan (favicon vb.) doğrudan gömülü SVG olarak render ediliyor.
+const String _googleLogoSvg = '''
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12
+    c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24
+    c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/>
+  <path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039
+    l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"/>
+  <path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36
+    c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z"/>
+  <path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571
+    c0.001-0.001,0.002-0.001,0.003-0.002l6.19,5.238C36.971,39.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083z"/>
+</svg>
+''';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -17,6 +36,7 @@ class _LoginPageState extends State<LoginPage> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _isLoading = false;
+  bool _isGoogleLoading = false;
   bool _rememberMe = true;
   bool _passwordVisible = false;
 
@@ -59,6 +79,155 @@ class _LoginPageState extends State<LoginPage> {
       }
     } catch (e) {
       print("⚠️ FCM Token alınamadı: $e");
+    }
+  }
+
+  String _generateConnectionCode() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    Random rnd = Random();
+    String code = String.fromCharCodes(
+      Iterable.generate(6, (_) => chars.codeUnitAt(rnd.nextInt(chars.length))),
+    );
+    return "${code.substring(0, 3)}-${code.substring(3, 6)}";
+  }
+
+  // Google ile ilk kez giriş yapan bir kullanıcı için rol soruyor (register
+  // akışında olduğu gibi elder/caregiver seçimi) - Google girişi ikisinden de
+  // gelebileceği için register_page.dart'taki gibi bir varsayım yapılamıyor.
+  // barrierDismissible: false - rol seçilmeden dialog kapatılamaz, aksi halde
+  // Firestore'a role'süz bir doküman yazılırdı.
+  Future<String?> _askRoleForNewGoogleUser() {
+    const Color mainGreen = Color(0xFF4DB6AC);
+    return showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          "Hesap Türünüzü Seçin",
+          style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
+        ),
+        content: Text(
+          "Google hesabınızla ilk kez giriş yapıyorsunuz. Devam etmek için hesap türünüzü seçin.",
+          style: GoogleFonts.poppins(fontSize: 15),
+        ),
+        actionsAlignment: MainAxisAlignment.spaceBetween,
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, "elder"),
+            child: Text(
+              "Kendi İlacım",
+              style: GoogleFonts.poppins(
+                color: mainGreen,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, "caregiver"),
+            child: Text(
+              "Yakınımın İlacı",
+              style: GoogleFonts.poppins(
+                color: mainGreen,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _signInWithGoogle() async {
+    setState(() => _isGoogleLoading = true);
+
+    try {
+      final GoogleSignInAccount googleUser = await GoogleSignIn.instance
+          .authenticate();
+      final String? idToken = googleUser.authentication.idToken;
+
+      if (idToken == null) {
+        // FirebaseAuthException fırlatmıyoruz: 'invalid-credential' kodu
+        // _getTurkishErrorMessage'da e-posta/şifre hatası olarak eşleniyor,
+        // burada yanıltıcı olurdu - generic catch bloğuna düşsün.
+        throw Exception('Google kimlik doğrulama bilgisi (idToken) alınamadı.');
+      }
+
+      final credential = GoogleAuthProvider.credential(idToken: idToken);
+      final userCredential = await _auth.signInWithCredential(credential);
+      final user = userCredential.user!;
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('beni_hatirla', true);
+
+      final userRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid);
+      final userDoc = await userRef.get();
+
+      String role;
+      if (!userDoc.exists) {
+        final selectedRole = await _askRoleForNewGoogleUser();
+        if (selectedRole == null) {
+          // barrierDismissible: false olduğu için normalde buraya düşmez,
+          // yine de defensive: yarım kalmış bir oturum bırakmamak için çık.
+          await _auth.signOut();
+          return;
+        }
+        role = selectedRole;
+        await userRef.set({
+          'uid': user.uid,
+          'name': user.displayName ?? '',
+          'email': user.email ?? '',
+          'role': role,
+          'connectionCode': _generateConnectionCode(),
+          'authProvider': 'google',
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      } else {
+        final data = userDoc.data() as Map<String, dynamic>;
+        role = data['role'] ?? 'elder';
+      }
+
+      await _saveDeviceToken(user.uid);
+
+      if (!mounted) return;
+      if (role == 'caregiver') {
+        Navigator.pushReplacementNamed(context, '/caregiver_home');
+      } else {
+        Navigator.pushReplacementNamed(context, '/home');
+      }
+    } on GoogleSignInException catch (e) {
+      if (e.code == GoogleSignInExceptionCode.canceled) {
+        return; // Kullanıcı hesap seçiciyi kapattı, sessizce geç.
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            "Google ile giriş yapılamadı: ${e.description ?? e.code}",
+          ),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_getTurkishErrorMessage(e.code)),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Google ile giriş sırasında bir hata oluştu."),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isGoogleLoading = false);
     }
   }
 
@@ -266,6 +435,66 @@ class _LoginPageState extends State<LoginPage> {
                               letterSpacing: 1,
                               color: Colors.white,
                             ),
+                          ),
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                Row(
+                  children: [
+                    Expanded(child: Divider(color: Colors.grey.shade300)),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Text(
+                        "veya",
+                        style: GoogleFonts.poppins(
+                          color: Colors.grey[500],
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                    Expanded(child: Divider(color: Colors.grey.shade300)),
+                  ],
+                ),
+
+                const SizedBox(height: 20),
+
+                SizedBox(
+                  width: double.infinity,
+                  height: 55,
+                  child: OutlinedButton(
+                    onPressed: _isGoogleLoading ? null : _signInWithGoogle,
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: Colors.grey.shade300),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    child: _isGoogleLoading
+                        ? const SizedBox(
+                            height: 22,
+                            width: 22,
+                            child: CircularProgressIndicator(strokeWidth: 2.5),
+                          )
+                        : Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              SvgPicture.string(
+                                _googleLogoSvg,
+                                width: 22,
+                                height: 22,
+                              ),
+                              const SizedBox(width: 12),
+                              Text(
+                                "Google ile Giriş Yap",
+                                style: GoogleFonts.poppins(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                            ],
                           ),
                   ),
                 ),

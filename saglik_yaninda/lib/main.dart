@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -20,6 +21,14 @@ import 'package:saglik_yaninda/services/notification_service.dart';
 import 'package:saglik_yaninda/pages/caregiver/caregiver_home_page.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/app_colors.dart';
+
+// Firebase konsolu → Authentication → Sign-in method → Google → "Web SDK
+// configuration" altındaki Web client ID. Android client ID DEĞİL — Firebase,
+// idToken'ın audience'ını bu web client'a göre doğruluyor; yanlış ID
+// GoogleSignIn.instance.initialize()'ı sessizce bozmaz ama signInWithCredential
+// aşamasında "invalid audience" hatasına yol açar.
+const String _googleServerClientId =
+    '308628032795-gc0cva54oiujgvf7b9mcf0mfi2fjg0r1.apps.googleusercontent.com';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -122,6 +131,12 @@ final _appLifecycleObserver = _AppLifecycleObserver();
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  // v7 API: GoogleSignIn artık singleton, initialize() runApp'ten önce tam
+  // olarak bir kere tamamlanmış olmalı (bkz. login_page.dart → _signInWithGoogle,
+  // initialize() bitmeden authenticate() çağrılırsa hata fırlatır).
+  await GoogleSignIn.instance.initialize(serverClientId: _googleServerClientId);
+
   await NotificationService.init();
 
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
