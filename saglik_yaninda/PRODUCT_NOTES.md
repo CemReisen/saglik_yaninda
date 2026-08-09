@@ -64,54 +64,62 @@ Caregiver kendi sesiyle kısa bir ses kaydı yapıp bildirim sesinin yerine koya
 
 ---
 
-## 4. Elder Kayıt / Giriş Akışı
+## 4. Elder Kayıt / Giriş Akışı ve Yeni Cihaz Kurtarma
 
 ### Sorun
 Yaşlı kullanıcı email/şifre/Google girişini hatırlamayabilir veya hiç bilmeyebilir.
 
-### Çözüm: Telefon Numarası + SMS Doğrulama
-- Elder girişi: **telefon numarası + SMS doğrulama kodu**, ardından sadece **isim-soyisim** sorulur. Email/şifre gerekmez.
-- Bu, misafir girişi **değildir** — kalıcı, veri kaybı riski olmayan gerçek bir hesap (Firebase Auth, telefon numarasına bağlı).
-- Elder'ın profili bu haliyle "eksik" (email vb. opsiyonel alanlar boş) sayılır.
+### Karar Geçmişi: Telefon+SMS reddedildi, Google + Email + Hızlı Başla'ya geçildi — TAMAMLANDI ✅
+İlk planlanan çözüm **telefon numarası + SMS doğrulama** idi. Bu fikir **maliyet nedeniyle iptal edildi** — Firebase Phone Authentication 2024'ten beri hiçbir ücretsiz kotası olmayan, her SMS için ücretlendirilen bir servis; ölçek büyüdükçe maliyet öngörülemez şekilde artabilirdi. Email ve Google ile giriş ise 50.000 aktif kullanıcıya kadar tamamen ücretsiz.
 
-### Senaryo: Telefon Değişikliği / Uygulama Silinmesi
-Yaşlı kullanıcı telefonunu kırar/değiştirir ya da uygulamayı yanlışlıkla siler:
-1. Uygulamayı yeniden kurar.
-2. Sadece telefon numarasını girer.
-3. SMS kodu ile doğrular.
-4. Firebase Auth aynı numarayı tanır → **aynı hesaba, aynı ilaç geçmişine, aynı caregiver bağlantısına otomatik geri döner.**
-5. Hiçbir veri kaybı olmaz. (WhatsApp'a benzer, tanıdık bir deneyim.)
+Yerine kurulan sistem **2026-08-09/10'da uygulanıp uçtan uca test edildi** (`ui-redesign` dalı — commit'ler ve teknik detaylar için bkz. `CLAUDE.md` → "Auth Sistemi Yenilendi" bölümü).
 
-### Caregiver'ın Eksik Bilgileri Tamamlaması
+### Giriş Ekranında Sunulan 3 Yöntem
+1. **Hızlı Başla** (BİRİNCİL/en üstte, yaşlı kullanıcı hedef kitlesi için önce geliyor) — sadece **isim-soyisim**, email/şifre gerekmez. Bu, misafir girişi **değildir** — arka planda Firebase Anonymous Authentication ile kalıcı, veri kaybı riski olmayan gerçek bir hesap açılıyor. Aynı zamanda üretilen "Aile Bağlantı Kodu" bu hesap için **kurtarma kodu** olarak da işlev görüyor; ekranda net bir uyarıyla gösteriliyor: *"Bu kodu bir yere yazın veya yakınınıza söyleyin — telefonunuzu değiştirirseniz bu kodla hesabınıza geri dönebilirsiniz."*
+2. **E-posta ile Giriş** — mevcut sistem, değişmedi.
+3. **Google ile Giriş** — ücretsiz, bazı yaşlı kullanıcıların zaten alışkın olabileceği bir yöntem. İlk girişte elder/caregiver rolü soruluyor (Google girişi ikisinden de gelebiliyor, register akışındaki gibi sabit bir rol varsayılamıyor).
+
+### Kurtarma Akışı (Telefon/Uygulama Değişikliği Durumunda)
+1. Yeni cihazda uygulama açılır, "Kodum var" seçilir.
+2. Kullanıcı kurtarma kodunu girer.
+3. Bir Cloud Function (`recoverWithCode`), bu kodu `users` koleksiyonunda arayıp (`connectionCode == code && authProvider == "anonymous"`) doğrulayan ve `admin.auth().createCustomToken(uid)` ile bir custom token üreten, `request.auth` gerektirmeyen bir callable.
+4. Kullanıcı bu token ile (`signInWithCustomToken`) giriş yapar → **aynı hesaba, aynı ilaç geçmişine, aynı caregiver bağlantısına geri döner.** Hiçbir veri kaybı olmaz.
+
+### Değerlendirilip Reddedilen Fikir: Opsiyonel PIN
+İlk düşünülen "4 haneli PIN, yeni cihazda ekstra sorulur" fikri **kaldırıldı** — çünkü "PIN unutuldu + caregiver yok" senaryosunda kurtarma mekanizması kurulamıyordu (destek ekibi olmayan, tek kişilik bir proje için çözülemeyen bir sorun yaratıyordu). Kabul edilen kurtarma kodu modeli bu sorunu taşımıyor: kod kaybolursa, caregiver'a bağlıysa ondan tekrar öğrenilebilir, ya da yeni bir hesap açılıp caregiver tekrar bağlanabilir — veri kaybı riski var ama kalıcı bir kilitlenme yok.
+
+### Güvenlik Notu (Kurtarma Kodu)
+Bu yöntem, email/Google kadar güçlü bir kimlik doğrulama değildir (kod başkası tarafından görülürse/ele geçirilirse hesaba erişilebilir). Ama:
+- Kod uzayı geniş (6 karakter, 36 sembol → 36⁶ ≈ 2,1 milyar kombinasyon) — kaba kuvvetle tarama pratik değil.
+- `recoverWithCode` sadece `authProvider == "anonymous"` hesapları hedefleyebiliyor — **email/Google hesapları bu yoldan asla ele geçirilemez.**
+- Kod-bazlı rate limit (5 dakikada en fazla 5 deneme, `uid` yok çünkü çağıran henüz giriş yapmamış olabilir) + bulunamama/anonim-olmama arasında ayrım göstermeyen genel bir hata mesajı (enumeration/oracle koruması) uygulandı.
+- **Firebase App Check bilinçli olarak ERTELENDİ** — projenin TÜM Firestore/Functions çağrılarını etkileyecek bir altyapı değişikliği olurdu, tek kişilik bir projede Play Store lansmanına yakın bu riski şimdi almak yerine kod-bazlı rate limit ile başlanması tercih edildi. *(İleride değerlendirilebilir — bkz. aşağıdaki "İleride Düşünülebilir".)*
+- Zaten planlanan "yeni cihaz girişinde caregiver'a onay bildirimi" katmanı (aşağıda) burada da ekstra güvenlik sağlayabilir.
+
+### Firestore Şema
+`users/{uid}` dokümanına `authProvider` alanı eklendi: `"password" | "google" | "anonymous"`. Anonim kullanıcılar için `email` alanı boş kalıyor. **Ayrı bir `recoveryCode` alanı YOK** — `connectionCode` hem bağlantı hem kurtarma kodu olarak kullanılıyor (bilinçli tasarım kararı: tek kod, kullanıcı için daha az kafa karışıklığı).
+
+### Caregiver'ın Eksik Bilgileri Tamamlaması *(henüz uygulanmadı — ileride)*
 - Caregiver, bağlandığı elder'ın profili eksikse (örn. email yok) bir uyarı görür: *"Ersin'in profili eksik, tamamlamak ister misiniz?"*
 - Caregiver isterse bu bilgileri elder adına doldurabilir. Sorumluluk elder'a değil, caregiver'a devredilir.
 
-### Kayıt Sırasında Caregiver Bağlama Teşviki
+### Kayıt Sırasında Caregiver Bağlama Teşviki *(henüz uygulanmadı — ileride)*
 Elder kayıt akışının sonunda net bir mesaj gösterilecek:
 > *"Güvenliğiniz için bir yakınınızın (oğlunuz/kızınız) sizi takip etmesini öneriyoruz — bağlantı kodunuzu paylaşın."*
 
 Zorunlu değil, ama güçlü şekilde teşvik edilen bir adım. Hem güvenlik hem ürünün asıl amacı (biri seni takip etsin) için önemli.
 
----
-
-## 5. Yeni Cihaz Güvenliği
-
-### Risk
-SMS-only girişte, telefon numarası ele geçirilirse (SIM swap gibi düşük olasılıklı ama var olan bir risk) hesap ele geçirilebilir. Asıl tehlike veri hırsızlığından çok, **bildirimlerin kapatılıp elder'ın ilaçsız kalması** gibi fiziksel bir risktir.
-
-### Değerlendirilip Reddedilen Fikir: Opsiyonel PIN
-İlk düşünülen "4 haneli PIN, yeni cihazda ekstra sorulur" fikri **kaldırıldı** — çünkü "PIN unutuldu + caregiver yok" senaryosunda kurtarma mekanizması kurulamıyor (destek ekibi olmayan, tek kişilik bir proje için çözülemeyen bir sorun yaratıyordu).
-
-### Kabul Edilen Basit Model
-1. **Caregiver varsa (öncelikli):** Yeni cihazdan giriş tespit edilirse, bağlı caregiver'a *"Bu siz miydiniz?"* bildirimi/onayı gider.
-2. **Caregiver yoksa:** Sadece SMS kodu ile giriş — WhatsApp ve benzer uygulamaların kabul ettiği standart risk seviyesi.
-
 ### İleride Düşünülebilir (v1 kapsamı dışı)
-Kullanıcı tabanı büyürse email tabanlı kurtarma veya destek süreci eklenebilir.
+- **Yeni cihaz girişinde caregiver onayı:** Caregiver varsa, yeni cihazdan/kurtarma koduyla giriş tespit edilirse bağlı caregiver'a *"Bu siz miydiniz?"* bildirimi/onayı gitsin — kurtarma kodunun üzerine ekstra bir güvenlik katmanı.
+- **Firebase App Check:** yukarıda ertelenen karar, kullanıcı tabanı büyüdükçe/lansman sonrası yeniden değerlendirilebilir.
+- Kullanıcı tabanı büyürse ayrıca destek süreci eklenebilir.
+
+### Bilinen eksik test (bir sonraki oturumun ilk işi olmalı)
+Hızlı Başla ile açılmış bir elder hesabının, Google/email ile açılmış bir caregiver hesabına bağlanması ve bildirimlerin (bağlantı isteği, ilaç alındı, SOS, dürtme) bu yeni auth yöntemleriyle açılmış hesaplarda da uçtan uca çalıştığının doğrulanması — çift cihaz/hesap gerektirdiği için henüz test edilemedi.
 
 ---
 
-## 6. Platform Stratejisi — iOS/Android Uyumsuzluğu
+## 5. Platform Stratejisi — iOS/Android Uyumsuzluğu
 
 ### Sorun
 İlk sürüm sadece **Play Store'da (Android)** yayınlanacak. Türkiye'de yaşlı kullanıcılar genelde Android, çocukları/torunları (caregiver adayları) genelde iPhone kullanıyor. Bu, caregiver'ın uygulamayı hiç indirememesi riskini doğuruyor — ürünün temel değer önerisi ("biri seni takip etsin") bazı ailelerde çalışmayabilir.
@@ -132,9 +140,11 @@ Kullanıcı tabanı büyürse email tabanlı kurtarma veya destek süreci eklene
 
 1. **Kusursuz elder deneyimi** (mevcut UI revizyonu, bugüne kadarki çalışma) — devam ediyor.
 2. **Onboarding turu** — yüksek öncelik, temel kullanılabilirlik sorunu.
-3. **Telefon+SMS giriş akışı** — mevcut giriş sistemini değiştirecek önemli bir mimari karar, dikkatli planlanmalı.
+3. ~~Telefon+SMS giriş akışı~~ → **Google + Email + Hızlı Başla + Kurtarma Kodu — TAMAMLANDI ✅ (2026-08-10)**, bkz. "4. Elder Kayıt / Giriş Akışı ve Yeni Cihaz Kurtarma" + `CLAUDE.md`. Kalan tek açık madde: Hızlı Başla × caregiver bağlantı çapraz testi (bkz. yukarısı, "Bilinen eksik test").
 4. **Play Store lansmanı** (Android-only, web dashboard olmadan).
 5. **Lansman sonrası:** monetizasyon özellikleri, caregiver web dashboard, iOS stratejisi.
+
+**Sıradaki öncelik netleşmedi** — `ui-redesign` dalının merge edilmesi mi (henüz `main`'e/`feature/ui-shell`'e merge bekliyor), yoksa yukarıdaki eksik çapraz test mi, yoksa onboarding turu mu önce gelmeli? Bir sonraki oturumda netleştirilmeli.
 
 ---
 
