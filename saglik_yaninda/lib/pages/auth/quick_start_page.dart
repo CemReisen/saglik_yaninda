@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:saglik_yaninda/core/theme/app_colors.dart';
 import 'package:saglik_yaninda/services/connection_code_service.dart';
 
@@ -55,6 +56,15 @@ class _QuickStartPageState extends State<QuickStartPage> {
       final uid = userCredential.user!.uid;
       final code = ConnectionCodeService.generate();
 
+      // register_page.dart/login_page.dart'ta olduğu gibi fcmToken'ı da
+      // doğrudan burada yazıyoruz - main.dart'taki authStateChanges
+      // dinleyicisi (_syncFcmToken) doküman henüz yokken tetiklenip
+      // `!snap.exists` nedeniyle atlayabiliyor, bir sonraki uygulama
+      // açılışına kadar (yeni bir auth event'i gelene dek) kendini
+      // düzeltmiyor - aradaki süre boyunca caregiver'dan gelecek dürtme/
+      // bağlantı bildirimleri bu kullanıcıya ulaşmazdı.
+      final fcmToken = await FirebaseMessaging.instance.getToken();
+
       // set(merge:true) - bu turun dersi: uid burada her zaman taze/yeni
       // olsa da (signInAnonymously her zaman yeni bir hesap açar), aynı
       // deseni tutarlı uygulamak (.update() değil) ek bir maliyeti yok ve
@@ -66,6 +76,7 @@ class _QuickStartPageState extends State<QuickStartPage> {
         'role': 'elder',
         'connectionCode': code,
         'authProvider': 'anonymous',
+        if (fcmToken != null) 'fcmToken': fcmToken,
         'createdAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
