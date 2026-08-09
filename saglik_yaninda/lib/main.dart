@@ -21,6 +21,7 @@ import 'package:saglik_yaninda/services/notification_service.dart';
 import 'package:saglik_yaninda/pages/caregiver/caregiver_home_page.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/app_colors.dart';
+import 'core/app_navigator_key.dart';
 
 // Firebase konsolu → Authentication → Sign-in method → Google → "Web SDK
 // configuration" altındaki Web client ID. Android client ID DEĞİL — Firebase,
@@ -201,6 +202,7 @@ class SaglikYanindaApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: rootNavigatorKey,
       debugShowCheckedModeBanner: false,
       title: 'Sağlık Yanında',
       theme: buildLightTheme(),

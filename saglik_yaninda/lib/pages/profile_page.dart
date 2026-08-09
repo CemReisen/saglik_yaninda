@@ -663,16 +663,32 @@ class ProfilePage extends StatelessWidget {
         onPressed: () async {
           final currentUser = FirebaseAuth.instance.currentUser;
           if (currentUser != null) {
-            await FirebaseFirestore.instance
-                .collection('users')
-                .doc(currentUser.uid)
-                .update({'fcmToken': ''});
+            try {
+              // .update() değil .set(merge:true) - bu doküman her zaman var
+              // olacağı garanti edilemez (ör. Google ile girişte rol seçimi
+              // tamamlanmadan çıkış denenirse, ya da başka bir sebeple hiç
+              // oluşmamışsa). Üstelik bu çağrı hiç try/catch içinde değildi -
+              // .update()'in fırlattığı NOT_FOUND istisnası hiçbir yerde
+              // yakalanmadan yukarı fırlıyor, çıkış işlemi (signOut/yönlendirme)
+              // hiç çalışmadan uygulama çöküyordu (gerçek cihazda gözlemlendi).
+              await FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(currentUser.uid)
+                  .set({'fcmToken': ''}, SetOptions(merge: true));
+            } catch (e) {
+              // fcmToken temizlenemese bile kullanıcı çıkış yapabilmeli -
+              // bu, "eski cihazda bildirim almaya devam etme" riskini göze
+              // alan, kasıtlı bir öncelik: sessiz kalmıyoruz (loglanıyor) ama
+              // engellemiyoruz da.
+              debugPrint("⚠️ Çıkışta fcmToken temizlenemedi: $e");
+            }
           }
           await FirebaseAuth.instance.signOut();
-          if (context.mounted)
+          if (context.mounted) {
             Navigator.of(
               context,
             ).pushNamedAndRemoveUntil('/login', (route) => false);
+          }
         },
         icon: const Icon(Icons.logout_rounded, color: Colors.white),
         label: Text(

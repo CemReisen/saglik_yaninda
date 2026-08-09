@@ -7,6 +7,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:saglik_yaninda/core/app_navigator_key.dart';
 
 // Google'ın standart çok renkli "G" logosu — asset dosyası eklemeden ya da ağ
 // isteği atmadan (favicon vb.) doğrudan gömülü SVG olarak render ediliyor.
@@ -72,9 +73,14 @@ class _LoginPageState extends State<LoginPage> {
       String? token = await messaging.getToken();
 
       if (token != null) {
-        await FirebaseFirestore.instance.collection('users').doc(userId).update(
-          {'fcmToken': token},
-        );
+        // .update() değil .set(merge:true) - Google akışında bu fonksiyon
+        // doküman henüz oluşmamışken de çağrılabilir (bkz. _signInWithGoogle
+        // içindeki NOT_FOUND bug raporu), .update() bu durumda istisna
+        // fırlatırdı.
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userId)
+            .set({'fcmToken': token}, SetOptions(merge: true));
         print("✅ FCM Token veritabanına kaydedildi.");
       }
     } catch (e) {
@@ -96,10 +102,18 @@ class _LoginPageState extends State<LoginPage> {
   // gelebileceği için register_page.dart'taki gibi bir varsayım yapılamıyor.
   // barrierDismissible: false - rol seçilmeden dialog kapatılamaz, aksi halde
   // Firestore'a role'süz bir doküman yazılırdı.
+  //
+  // ÖNEMLİ: context yerine rootNavigatorKey.currentState!.context kullanılıyor.
+  // signInWithCredential() döndüğü anda main.dart'taki authStateChanges
+  // StreamBuilder'ı home: widget'ını değiştirip LoginPage'i dispose ediyor -
+  // bu noktadan sonra LoginPage'in kendi context'i "deactivated widget"
+  // hatası verir (bkz. app_navigator_key.dart'taki açıklama). MaterialApp
+  // dispose olmadığı için ona bağlı bu context her zaman geçerli kalıyor.
   Future<String?> _askRoleForNewGoogleUser() {
     const Color mainGreen = Color(0xFF4DB6AC);
+    final dialogContext = rootNavigatorKey.currentState?.context ?? context;
     return showDialog<String>(
-      context: context,
+      context: dialogContext,
       barrierDismissible: false,
       builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -215,22 +229,42 @@ class _LoginPageState extends State<LoginPage> {
           backfill['authProvider'] = 'google';
         }
         if (backfill.isNotEmpty) {
-          await userRef.update(backfill);
+          // .update() değil .set(merge:true) - userDoc.exists true olsa bile
+          // (ör. Firestore'un local cache'i güncel olmayan bir snapshot
+          // döndürmüşse, ya da bu arada başka bir yerden silinmişse) doküman
+          // sunucuda gerçekten yoksa .update() NOT_FOUND ile patlıyordu -
+          // gerçek cihazda gözlemlendi (bkz. HESAPTAN ÇIKIŞ bug'ıyla aynı
+          // kategori, profile_page.dart -> _buildLogoutButton). set(merge)
+          // doküman varsa sadece bu alanları günceller, yoksa oluşturur -
+          // ikisinde de güvenli.
+          await userRef.set(backfill, SetOptions(merge: true));
         }
       }
 
       await _saveDeviceToken(user.uid);
 
-      if (!mounted) return;
-      if (role == 'caregiver') {
-        Navigator.pushReplacementNamed(context, '/caregiver_home');
-      } else {
-        Navigator.pushReplacementNamed(context, '/home');
+      // Navigator.pushReplacementNamed(context, ...) YERİNE rootNavigatorKey
+      // kullanılıyor - aynı gerekçe: bu noktada LoginPage artık mounted
+      // olmayabilir (yukarıdaki not). Bu çağrı salt "güzel olsun" değil,
+      // gerçekten gerekli: main.dart'taki kök StreamBuilder, auth state
+      // değiştiği anda Firestore'u BİR KEZ okuyup (rol dokümanı henüz
+      // yazılmamışken) varsayılan "elder" ile MainLayout'u göstermiş olabilir;
+      // caregiver seçen bir kullanıcı için bunu burada düzeltmemiz gerekiyor -
+      // kök StreamBuilder yeni bir auth event'i olmadan kendiliğinden
+      // yeniden kontrol etmiyor.
+      final navState = rootNavigatorKey.currentState;
+      if (navState != null) {
+        if (role == 'caregiver') {
+          navState.pushReplacementNamed('/caregiver_home');
+        } else {
+          navState.pushReplacementNamed('/home');
+        }
       }
     } on GoogleSignInException catch (e) {
       if (e.code == GoogleSignInExceptionCode.canceled) {
         return; // Kullanıcı hesap seçiciyi kapattı, sessizce geç.
       }
+      debugPrint("⚠️ Google ile giriş başarısız: ${e.code} ${e.description}");
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -241,6 +275,7 @@ class _LoginPageState extends State<LoginPage> {
         ),
       );
     } on FirebaseAuthException catch (e) {
+      debugPrint("⚠️ Google ile girişte FirebaseAuthException: ${e.code} ${e.message}");
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -249,6 +284,12 @@ class _LoginPageState extends State<LoginPage> {
         ),
       );
     } catch (e) {
+      // Önceden bu blok, LoginPage dispose olmuşsa (bkz. yukarıdaki
+      // rootNavigatorKey notu) `if (!mounted) return;` ile HİÇBİR iz
+      // bırakmadan çıkıyordu - gerçek hata (ör. showDialog'un "deactivated
+      // widget" hatası ya da bir Firestore izin hatası) tamamen kayboluyordu.
+      // debugPrint artık mounted durumundan bağımsız, her zaman çalışıyor.
+      debugPrint("⚠️ Google ile girişte beklenmeyen hata: $e");
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(

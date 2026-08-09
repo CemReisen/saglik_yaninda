@@ -1224,10 +1224,19 @@ class CaregiverProfilePage extends StatelessWidget {
                 height: 55,
                 child: ElevatedButton.icon(
                   onPressed: () async {
-                    await FirebaseFirestore.instance
-                        .collection('users')
-                        .doc(currentUser.uid)
-                        .update({'fcmToken': ''});
+                    try {
+                      // .update() değil .set(merge:true) - elder tarafındaki
+                      // aynı bug'ın (profile_page.dart -> _buildLogoutButton)
+                      // caregiver eşleniği: doküman her zaman var olacağı
+                      // garanti edilemez, .update() NOT_FOUND ile tüm çıkış
+                      // işlemini (signOut/yönlendirme dahil) çökertiyordu.
+                      await FirebaseFirestore.instance
+                          .collection('users')
+                          .doc(currentUser.uid)
+                          .set({'fcmToken': ''}, SetOptions(merge: true));
+                    } catch (e) {
+                      debugPrint("⚠️ Çıkışta fcmToken temizlenemedi: $e");
+                    }
                     await FirebaseAuth.instance.signOut();
                     if (context.mounted) {
                       Navigator.pushNamedAndRemoveUntil(
