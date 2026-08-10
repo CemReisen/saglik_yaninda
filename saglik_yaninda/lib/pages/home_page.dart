@@ -8,6 +8,7 @@ import 'package:saglik_yaninda/services/notification_service.dart';
 import 'package:intl/intl.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:connectivity_plus/connectivity_plus.dart'; // 🔥 YENİ: İNTERNET KONTROL PAKETİ
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:showcaseview/showcaseview.dart';
 import 'package:saglik_yaninda/core/theme/app_colors.dart';
 import 'package:saglik_yaninda/widgets/edit_medicine_dialog.dart';
@@ -47,6 +48,34 @@ class _HomePageState extends State<HomePage> {
   // kartı ve gecikmiş-ilaç tespiti hep günün tamamına bakmaya devam ediyor.
   static const List<String> _dayPeriods = ["Sabah", "Öğle", "Akşam", "Gece"];
   late String _selectedPeriod;
+
+  // --- Zamana göre / Tümünü Göster toggle'ı -------------------------------
+  // İlaç Listesi kartının varsayılan davranışı hâlâ yukarıdaki zaman dilimi
+  // filtresi (_selectedPeriod) - bu, kullanıcının SharedPreferences'ta
+  // KALICI olarak sakladığı bir tercihle (_showAllPeriods) devre dışı
+  // bırakılabiliyor: "Tümünü Göster" modunda kart, seçili dilimden bağımsız
+  // günün TÜM ilaçlarını listeler. Kalıcı seçildi çünkü kullanıcı profili
+  // (yaşlı, tek bir ilaç zaman diliminde kullanıyor olabilir) her açılışta
+  // yeniden ayarlamak istemeyecektir - bkz. _loadShowAllPeriodsPreference.
+  //
+  // `_onboardingForceShowAllPeriods` ayrı ve bilinçli olarak GEÇİCİ bir
+  // bayrak: onboarding turunun dalga 2'si (kart+İçtim) tetiklenirken hedef
+  // mevcut zaman diliminde yoksa (bkz. _maybeStartHomeOnboarding'teki bug
+  // fix notu) tur süresince devreye giriyor, kullanıcının kalıcı
+  // `_showAllPeriods` tercihine hiç dokunmadan - tur bitince (onFinish/
+  // onDismiss) otomatik false'a dönüyor. İkisinden herhangi biri true ise
+  // liste zaman dilimi filtresi olmadan gösteriliyor (bkz.
+  // _effectiveShowAllPeriods).
+  static const String _showAllPeriodsPrefKey = 'home_show_all_periods';
+  bool _showAllPeriods = false;
+  bool _onboardingForceShowAllPeriods = false;
+  bool get _effectiveShowAllPeriods =>
+      _showAllPeriods || _onboardingForceShowAllPeriods;
+  // "Yardım Al" (manuel tur) build() dışından tetiklendiği için, dalga
+  // 2'nin hedefinin mevcut dilimde olup olmadığını kontrol edebilmek adına
+  // en son hesaplanan bugünkü ilaç listesinin bir kopyası burada tutuluyor
+  // - bkz. _startHomeTourManually.
+  List<QueryDocumentSnapshot> _todaysMedicinesCache = [];
 
   // --- Onboarding turu (Home) ---------------------------------------------
   // 7 adımlı, iki dalgalı ilk-kurulum turu (bkz. PRODUCT_NOTES.md → "3.
@@ -99,10 +128,38 @@ class _HomePageState extends State<HomePage> {
     return "Gece";
   }
 
+  bool _hasMedicineInCurrentPeriod(List<QueryDocumentSnapshot> medicines) {
+    return medicines.any(
+      (doc) =>
+          _periodForHour((doc.data() as Map<String, dynamic>)['hour'] ?? 0) ==
+          _selectedPeriod,
+    );
+  }
+
+  Future<void> _loadShowAllPeriodsPreference() async {
+    final prefs = await SharedPreferences.getInstance();
+    final bool? saved = prefs.getBool(_showAllPeriodsPrefKey);
+    if (saved != null && mounted) {
+      setState(() => _showAllPeriods = saved);
+    }
+  }
+
+  /// "Tümünü Göster" ikonuna dokununca çağrılır - kullanıcının KALICI
+  /// tercihini değiştirir (bkz. _showAllPeriods alanındaki not). Onboarding
+  /// turunun geçici zorlaması (_onboardingForceShowAllPeriods) bundan ayrı
+  /// tutuluyor, buradan hiç etkilenmiyor.
+  Future<void> _toggleShowAllPeriods() async {
+    final bool newValue = !_showAllPeriods;
+    setState(() => _showAllPeriods = newValue);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_showAllPeriodsPrefKey, newValue);
+  }
+
   @override
   void initState() {
     super.initState();
     _selectedPeriod = _periodForHour(DateTime.now().hour);
+    _loadShowAllPeriodsPreference();
     _homeTourView = ShowcaseView.register(
       scope: homeTourScope,
       // Tur atlanamaz olmalı (PRODUCT_NOTES: "zorunlu, atlanamaz") — karanlık
@@ -132,11 +189,26 @@ class _HomePageState extends State<HomePage> {
           OnboardingFlags.markCompleted(uid, OnboardingFlags.homeMeds);
         }
       },
+      // Her ikisi de (Anladım ile doğal bitiş / X ile erken kapatma) turun
+      // GEÇİCİ "Tümünü Göster" zorlamasını (bkz. _onboardingForceShowAllPeriods)
+      // temizliyor - kullanıcı kalıcı tercihine (otomatik ya da tümünü
+      // göster, hangisiyse) döner. Kalıcı _showAllPeriods buradan hiç
+      // etkilenmiyor.
       onFinish: () {
-        if (mounted) setState(() => _setOnboardingTourActive(false));
+        if (mounted) {
+          setState(() {
+            _setOnboardingTourActive(false);
+            _onboardingForceShowAllPeriods = false;
+          });
+        }
       },
       onDismiss: (_) {
-        if (mounted) setState(() => _setOnboardingTourActive(false));
+        if (mounted) {
+          setState(() {
+            _setOnboardingTourActive(false);
+            _onboardingForceShowAllPeriods = false;
+          });
+        }
       },
     );
     if (user != null) {
@@ -1547,6 +1619,55 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  /// İlaç Listesi kartının sağ üst köşesindeki saat ikonu - varsayılan
+  /// "Otomatik" (zaman dilimine göre filtrelenmiş, mevcut davranış) mod ile
+  /// "Tümünü Göster" modu arasında geçiş yapar (bkz. _showAllPeriods).
+  /// İki durum bilinçli olarak İKİ ayrı sinyalle ayırt ediliyor - sadece
+  /// renk değil, ikonun kendisi de dolu/boş değişiyor (Icons.schedule
+  /// outline ↔ Icons.access_time_filled dolu) - renk körlüğü gibi
+  /// durumlarda da state farkı okunabilsin diye.
+  Widget _buildPeriodToggleButton() {
+    final bool showAll = _effectiveShowAllPeriods;
+    return Tooltip(
+      message: showAll
+          ? "Tümü gösteriliyor. Zaman dilimine göre görünüme dönmek için dokun."
+          : "Sadece $_selectedPeriod dilimi gösteriliyor. Tüm ilaçları görmek için dokun.",
+      child: Material(
+        color: Colors.transparent,
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: () {
+            // Tur açıkken (spotlight overlay'i translucent olduğu için
+            // gerçek dokunuş buraya da ulaşabiliyor) kullanıcının kalıcı
+            // tercihi turun geçici zorlamasıyla (_onboardingForceShowAllPeriods)
+            // karışmasın diye dokunuş yutuluyor - bkz. diğer butonlardaki
+            // aynı desen.
+            if (_onboardingTourActive) return;
+            _toggleShowAllPeriods();
+          },
+          child: Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: showAll ? AppColors.primary : Colors.transparent,
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: AppColors.primary.withOpacity(showAll ? 1 : 0.4),
+                width: 1.2,
+              ),
+            ),
+            child: Icon(
+              showAll ? Icons.access_time_filled : Icons.schedule,
+              size: 18,
+              color: showAll ? Colors.white : AppColors.primary,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (user == null) return const Center(child: Text("Giriş Yapılmalı"));
@@ -1634,8 +1755,12 @@ class _HomePageState extends State<HomePage> {
                   // tetiklenmesinde (userData artık dolu olacağı için) tekrar
                   // denenecek, yanlış (eksik veriyle hesaplanmış) bir "her şey
                   // tamamlandı/eksik" kararı verip kilitlenmeyeceğiz.
-                  if (userData != null) _maybeStartHomeOnboarding(userData);
-
+                  //
+                  // NOT: _maybeStartHomeOnboarding çağrısı aşağıya,
+                  // todaysMedicines hesaplandıktan SONRAYA taşındı - dalga
+                  // 2'nin hedefi mevcut zaman diliminde var mı yok mu
+                  // kararını verebilmesi için o listeye ihtiyacı var (bkz.
+                  // metodun kendi dokümantasyonu).
                   var allMedicines = snapshot.data!.docs;
                   String todayName = _getShortDayName();
                   final todayDate = DateTime(
@@ -1682,16 +1807,29 @@ class _HomePageState extends State<HomePage> {
                   int totalCount = todaysMedicines.length;
                   var nextMedDoc = _getNextMedicine(todaysMedicines, today);
 
+                  // "Yardım Al" (manuel tur) bu build'in dışından
+                  // tetiklendiği için (bkz. _startHomeTourManually) en son
+                  // hesaplanan listenin bir kopyasını burada saklıyoruz.
+                  _todaysMedicinesCache = todaysMedicines;
+                  if (userData != null) {
+                    _maybeStartHomeOnboarding(userData, todaysMedicines);
+                  }
+
                   // Seçili zaman dilimine göre SADECE listenin görünümü
                   // filtreleniyor - totalCount/nextMedDoc bilinçli olarak
                   // yukarıdaki (filtresiz) todaysMedicines'a bakmaya devam
                   // ediyor (bkz. _selectedPeriod alanındaki not).
+                  // "Tümünü Göster" aktifken (kalıcı tercih ya da
+                  // onboarding'in geçici zorlaması, bkz.
+                  // _effectiveShowAllPeriods) bu filtre tamamen atlanıyor.
                   final List<QueryDocumentSnapshot> filteredMedicines =
-                      todaysMedicines.where((doc) {
-                        final data = doc.data() as Map<String, dynamic>;
-                        return _periodForHour(data['hour'] ?? 0) ==
-                            _selectedPeriod;
-                      }).toList();
+                      _effectiveShowAllPeriods
+                      ? todaysMedicines
+                      : todaysMedicines.where((doc) {
+                          final data = doc.data() as Map<String, dynamic>;
+                          return _periodForHour(data['hour'] ?? 0) ==
+                              _selectedPeriod;
+                        }).toList();
 
                   return Column(
                     children: [
@@ -1749,25 +1887,32 @@ class _HomePageState extends State<HomePage> {
                                           color: const Color(0xFF424B7F),
                                         ),
                                       ),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 12,
-                                          vertical: 6,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFE0F2F1),
-                                          borderRadius: BorderRadius.circular(
-                                            12,
+                                      Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Container(
+                                            padding:
+                                                const EdgeInsets.symmetric(
+                                                  horizontal: 12,
+                                                  vertical: 6,
+                                                ),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFE0F2F1),
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                            ),
+                                            child: Text(
+                                              "$totalCount İlaç",
+                                              style: const TextStyle(
+                                                color: Color(0xFF00695C),
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: 15,
+                                              ),
+                                            ),
                                           ),
-                                        ),
-                                        child: Text(
-                                          "$totalCount İlaç",
-                                          style: const TextStyle(
-                                            color: Color(0xFF00695C),
-                                            fontWeight: FontWeight.w600,
-                                            fontSize: 15,
-                                          ),
-                                        ),
+                                          const SizedBox(width: 8),
+                                          _buildPeriodToggleButton(),
+                                        ],
                                       ),
                                     ],
                                   ),
@@ -1789,7 +1934,20 @@ class _HomePageState extends State<HomePage> {
                                     showCloseButton: _onboardingTourIsManual,
                                     onClose: () => _homeTourView.dismiss(),
                                   ),
-                                  child: _buildPeriodChips(),
+                                  // "Tümünü Göster" aktifken (kalıcı tercih ya
+                                  // da onboarding'in geçici zorlaması) bu
+                                  // çipler listenin görünümünü etkilemiyor -
+                                  // dokunuşları hâlâ çalışıyor (bir sonraki
+                                  // otomatik moda dönüşte hangi dilimin
+                                  // seçili olacağını belirlemeye devam
+                                  // ediyor) ama soluk gösterilerek "şu an
+                                  // etkisiz" olduğu ima ediliyor.
+                                  child: Opacity(
+                                    opacity: _effectiveShowAllPeriods
+                                        ? 0.4
+                                        : 1,
+                                    child: _buildPeriodChips(),
+                                  ),
                                 ),
                                 const SizedBox(height: 8),
 
@@ -2437,7 +2595,10 @@ class _HomePageState extends State<HomePage> {
   /// MainLayout/HomePage açıyor, eskisini geri getirmiyor) - o yüzden bu
   /// erken çıkış zararsız: gerçekten görünür olan (yeni) Home örneği kendi
   /// route'u zaten `current` iken taze mount olup turu doğru gösteriyor.
-  void _maybeStartHomeOnboarding(Map<String, dynamic>? userData) {
+  void _maybeStartHomeOnboarding(
+    Map<String, dynamic>? userData,
+    List<QueryDocumentSnapshot> todaysMedicines,
+  ) {
     if (_hasCheckedHomeOnboarding) return;
     _hasCheckedHomeOnboarding = true;
     final bool introDone = OnboardingFlags.isCompletedFromData(
@@ -2453,6 +2614,22 @@ class _HomePageState extends State<HomePage> {
       if (!medsDone) ..._wave2Keys,
     ];
     if (pendingSteps.isEmpty) return;
+
+    // Bug fix (gerçek cihazda bulundu): dalga 2 (kart+İçtim) beklerken,
+    // bugünün ilaçları arasında MEVCUT zaman dilimi filtresine (bkz.
+    // _selectedPeriod) uyan hiçbir şey yoksa (ör. akşam saatlerinde sabah
+    // dilimine bir ilaç eklenmişse) filteredMedicines boş kalır, index 0
+    // hiç render edilmez, skipIfTargetNotPresent kart/İçtim adımlarının
+    // ikisini de sessizce atlar. Bu durumda turu başlatmadan önce GEÇİCİ
+    // olarak "Tümünü Göster"e geçiyoruz (bkz. _onboardingForceShowAllPeriods)
+    // - en az 1 ilaç olduğunu (pendingSteps'in dolu olmasından) zaten
+    // biliyoruz, o yüzden bu her zaman index 0'a gerçek bir hedef koyar.
+    final bool needsShowAllOverride =
+        !medsDone &&
+        !_effectiveShowAllPeriods &&
+        todaysMedicines.isNotEmpty &&
+        !_hasMedicineInCurrentPeriod(todaysMedicines);
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       // Bu Home örneğinin route'u şu an ekranın en üstünde değilse (ör.
@@ -2460,8 +2637,10 @@ class _HomePageState extends State<HomePage> {
       // başlatma - bkz. yukarıdaki "Bug fix" notu.
       final route = ModalRoute.of(context);
       if (route != null && !route.isCurrent) return;
-      setState(() => _setOnboardingTourActive(true));
-      _homeTourView.startShowCase(pendingSteps);
+      _runOnboardingSequence(
+        pendingSteps,
+        needsShowAllOverride: needsShowAllOverride,
+      );
     });
   }
 
@@ -2469,18 +2648,50 @@ class _HomePageState extends State<HomePage> {
   /// baştan (7 adımın hepsini sırayla) yeniden başlatır. Manuel modda
   /// tooltip kartında bir kapatma (X) ikonu belirir (bkz.
   /// _onboardingTourIsManual → OnboardingTooltipCard). Dalga 2'nin hedefi
-  /// (ilaç kartı/İçtim) yoksa her zamanki gibi skipIfTargetNotPresent ile
-  /// sessizce atlanır - "tekrar öğren" niyeti tamdır, dalga tamamlanma
-  /// durumuna bakılmaz.
+  /// (ilaç kartı/İçtim) mevcut zaman diliminde yoksa, _maybeStartHomeOnboarding
+  /// ile aynı bug fix uygulanır (bkz. o metodun dokümantasyonu) - "tekrar
+  /// öğren" niyeti tamdır, dalga tamamlanma durumuna bakılmaz.
   void _startHomeTourManually() {
-    setState(() => _setOnboardingTourActive(true, manual: true));
-    // setState'in tetiklediği rebuild tamamlanmadan startShowCase çağrılırsa
-    // Showcase.withWidget'ın container'ı (OnboardingTooltipCard) hâlâ eski
-    // _onboardingTourIsManual değeriyle (false, kapatma ikonu gizli) inşa
-    // edilmiş olabilir — post-frame callback bu sırayı garanti eder.
+    final bool needsShowAllOverride =
+        !_effectiveShowAllPeriods &&
+        _todaysMedicinesCache.isNotEmpty &&
+        !_hasMedicineInCurrentPeriod(_todaysMedicinesCache);
+    _runOnboardingSequence(
+      [..._wave1Keys, ..._wave2Keys],
+      manual: true,
+      needsShowAllOverride: needsShowAllOverride,
+    );
+  }
+
+  /// `_maybeStartHomeOnboarding` ve `_startHomeTourManually`'nin paylaştığı
+  /// ortak başlatma yolu. `needsShowAllOverride` true ise, turu başlatmadan
+  /// önce GEÇİCİ olarak "Tümünü Göster" moduna geçilir (bkz.
+  /// _onboardingForceShowAllPeriods) - kullanıcının kalıcı `_showAllPeriods`
+  /// tercihine DOKUNULMAZ, tur bitince (onFinish/onDismiss) otomatik geri
+  /// alınır.
+  ///
+  /// setState çağrısından sonra tek bir postFrameCallback ile startShowCase
+  /// çağrılıyor - bu, hem OnboardingTooltipCard'ın güncel
+  /// _onboardingTourIsManual değeriyle inşa edilmesini hem de (forceShowAll
+  /// durumunda) kart/İçtim hedefinin ağaca gerçekten eklenmiş olmasını
+  /// garanti ediyor: showcaseview paketinde bir Showcase'in controller'ı
+  /// kendi `initState`'inde SENKRON olarak kaydediliyor (bkz. paket
+  /// kaynağı, showcase.dart → _ShowcaseState.initState), yani setState'in
+  /// tetiklediği rebuild TAMAMLANDIKTAN sonra (bir sonraki frame'in
+  /// postFrameCallback'i) startShowCase çağrıldığında controller her zaman
+  /// hazır olur.
+  void _runOnboardingSequence(
+    List<GlobalKey> steps, {
+    bool manual = false,
+    bool needsShowAllOverride = false,
+  }) {
+    setState(() {
+      _setOnboardingTourActive(true, manual: manual);
+      if (needsShowAllOverride) _onboardingForceShowAllPeriods = true;
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      _homeTourView.startShowCase([..._wave1Keys, ..._wave2Keys]);
+      _homeTourView.startShowCase(steps);
     });
   }
 
