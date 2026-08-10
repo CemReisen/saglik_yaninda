@@ -2225,6 +2225,25 @@ class _HomePageState extends State<HomePage> {
   /// OnboardingFlags dokümantasyonu) sadece tamamlanmamış olan adım(lar)
   /// `startShowCase`'e veriliyor - zaten tamamlanmış bir adım asla tekrar
   /// otomatik gösterilmiyor.
+  ///
+  /// **Bug fix (gerçek cihazda bulundu):** Hızlı Başla/Kurtarma kodu
+  /// akışları bu sayfayı (login_page.dart/quick_start_page.dart/
+  /// recovery_code_page.dart'taki mimari nottaki gibi) `Navigator.pushNamed`
+  /// ile üstlerine PUSH edilmiş bir sayfa varken ARKA PLANDA mount
+  /// edebiliyor — `signInAnonymously()`/`signInWithCustomToken()` başarılı
+  /// olur olmaz kök `authStateChanges` `StreamBuilder`'ı "/" route'unun
+  /// İÇERİĞİNİ (LoginPage → MainLayout) değiştiriyor, ama QuickStart/
+  /// RecoveryCode sayfası (kod ekranı) hâlâ navigator stack'inde ÜSTTE.
+  /// Bu Home örneği o an görünmez olsa bile `initState`/userStream aynı
+  /// şekilde tetikleniyor - `ModalRoute.isCurrent` kontrolü OLMADAN, bu
+  /// arka plandaki Home kendi spotlight'ını başlatıp kod ekranının ALTINDA
+  /// (ama ikisi üst üste görünecek şekilde) gösteriyordu. Kontrol, bu
+  /// örnek görünür hâle gelene kadar başlatmayı erteliyor. Pratikte bu arka
+  /// plan örneği bir daha hiç görünür olmuyor (QuickStart/RecoveryCode
+  /// sonunda `pushReplacementNamed('/home')` ile TAMAMEN YENİ bir route/
+  /// MainLayout/HomePage açıyor, eskisini geri getirmiyor) - o yüzden bu
+  /// erken çıkış zararsız: gerçekten görünür olan (yeni) Home örneği kendi
+  /// route'u zaten `current` iken taze mount olup turu doğru gösteriyor.
   void _maybeStartHomeOnboarding(Map<String, dynamic>? userData) {
     if (_hasCheckedHomeOnboarding) return;
     _hasCheckedHomeOnboarding = true;
@@ -2243,6 +2262,11 @@ class _HomePageState extends State<HomePage> {
     if (pendingSteps.isEmpty) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      // Bu Home örneğinin route'u şu an ekranın en üstünde değilse (ör.
+      // Hızlı Başla'nın "kodu kaydedin" ekranı hâlâ üstte) spotlight'ı hiç
+      // başlatma - bkz. yukarıdaki "Bug fix" notu.
+      final route = ModalRoute.of(context);
+      if (route != null && !route.isCurrent) return;
       setState(() {
         _onboardingTourActive = true;
         _onboardingTourIsManual = false;
