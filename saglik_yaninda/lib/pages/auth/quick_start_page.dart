@@ -78,6 +78,11 @@ class _QuickStartPageState extends State<QuickStartPage> {
         'authProvider': 'anonymous',
         if (fcmToken != null) 'fcmToken': fcmToken,
         'createdAt': FieldValue.serverTimestamp(),
+        // Onboarding turu bayrakları - yeni hesap, üçü de henüz görülmedi
+        // (bkz. lib/services/onboarding_service.dart).
+        'onboardingHomeCompleted': false,
+        'onboardingAddCompleted': false,
+        'onboardingProfileCompleted': false,
       }, SetOptions(merge: true));
 
       if (!mounted) return;

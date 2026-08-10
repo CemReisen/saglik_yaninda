@@ -26,6 +26,12 @@ class AppColors {
   static const positive = Color(0xFF4CAF50); // yeşil: Aldım
   static const negative = Color(0xFFE57373); // kırmızı: Atladım
 
+  // Onboarding / yardım turu — bilinçli olarak SOS kırmızısından (#E53935) ve
+  // primary teal'den (#4DB6AC) ayrı bir aile: "yardım/bilgi" çağrışımı yapan,
+  // uygulamada başka hiçbir yerde kullanılmayan mor/lavanta. SOS'un aciliyet
+  // algısıyla karışmaması PRODUCT_NOTES'ta açık gereksinim.
+  static const helpAccent = Color(0xFF7E57C2);
+
   // Liste arka planı
   static const listItemBg = Color(0xFFF9FBFB);
 }

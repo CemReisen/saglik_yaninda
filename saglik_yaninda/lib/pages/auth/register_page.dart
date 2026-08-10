@@ -94,6 +94,13 @@ class _RegisterPageState extends State<RegisterPage> {
         "connectionCode": connectionCode,
         "fcmToken": token,
         "createdAt": FieldValue.serverTimestamp(),
+        // Onboarding turu bayrakları - yeni hesap, üçü de henüz görülmedi
+        // (bkz. lib/services/onboarding_service.dart). Caregiver turları
+        // henüz uygulanmadı ama elder alanlarını her rolde yazmak zararsız -
+        // hiç okunmayan bir hesapta sadece kullanılmadan duruyor.
+        "onboardingHomeCompleted": false,
+        "onboardingAddCompleted": false,
+        "onboardingProfileCompleted": false,
       });
 
       if (!mounted) return;

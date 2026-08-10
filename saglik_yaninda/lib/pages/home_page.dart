@@ -8,8 +8,11 @@ import 'package:saglik_yaninda/services/notification_service.dart';
 import 'package:intl/intl.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:connectivity_plus/connectivity_plus.dart'; // 🔥 YENİ: İNTERNET KONTROL PAKETİ
+import 'package:showcaseview/showcaseview.dart';
 import 'package:saglik_yaninda/core/theme/app_colors.dart';
 import 'package:saglik_yaninda/widgets/edit_medicine_dialog.dart';
+import 'package:saglik_yaninda/widgets/onboarding/onboarding_tooltip_card.dart';
+import 'package:saglik_yaninda/services/onboarding_service.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -44,6 +47,28 @@ class _HomePageState extends State<HomePage> {
   static const List<String> _dayPeriods = ["Sabah", "Öğle", "Akşam", "Gece"];
   late String _selectedPeriod;
 
+  // --- Onboarding turu (Home) ---------------------------------------------
+  // SOS ve İçtim butonlarını sırayla spotlight'layan ilk-kurulum turu (bkz.
+  // PRODUCT_NOTES.md → "3. Onboarding"). "home_onboarding" scope'u, bu
+  // sayfanın Showcase widget'larını başka sayfaların (Ekle/Profil) kendi
+  // scope'larından izole eder — her scope'a widget'ların `scope:` parametresi
+  // de açıkça eşleşiyor, "en son aktif scope" gibi zımni bir varsayıma
+  // güvenilmiyor (bkz. showcaseview paket kaynağı, Showcase._scopeName).
+  static const String _homeTourScope = 'home_onboarding';
+  final GlobalKey _sosShowcaseKey = GlobalKey();
+  final GlobalKey _icTimShowcaseKey = GlobalKey();
+  late final ShowcaseView _homeTourView;
+  bool _hasCheckedHomeOnboarding = false;
+  // Tur açıkken SOS/İçtim'in GERÇEK aksiyonunu (SOS bildirimi/ilaç işaretleme)
+  // tetiklememek için: showcaseview'ın hedef overlay'i varsayılan olarak
+  // translucent — spotlight'lanan gerçek widget'a dokunmak, arkasındaki
+  // gerçek GestureDetector'a da ulaşıyor (paket kaynağında doğrulandı, bkz.
+  // target_widget.dart). Bu, ilk kez uygulamayı gören/tur okuyan bir
+  // kullanıcının yanlışlıkla gerçek bir SOS göndermesi gibi istenmeyen bir
+  // yan etkiye yol açabilirdi.
+  bool _onboardingTourActive = false;
+  bool _onboardingTourIsManual = false;
+
   /// Gece dilimi gece yarısını sarıyor (21:00-04:59), bu yüzden basit bir
   /// aralık karşılaştırması yerine en/en az kontrolü gerekiyor.
   String _periodForHour(int hour) {
@@ -57,6 +82,27 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
     _selectedPeriod = _periodForHour(DateTime.now().hour);
+    _homeTourView = ShowcaseView.register(
+      scope: _homeTourScope,
+      // Tur atlanamaz olmalı (PRODUCT_NOTES: "zorunlu, atlanamaz") — karanlık
+      // alana dokunmak adımı geçmesin/kapatmasın, tek ilerleme yolu
+      // OnboardingTooltipCard'daki "Anladım" butonu.
+      disableBarrierInteraction: true,
+      // İçtim adımının hedefi (bugünün ilk alınmamış ilacı) hiç yoksa (ör.
+      // yeni bir elder hesabında henüz ilaç eklenmemişse) o adımı sessizce
+      // atlayıp turu SOS'la bitirir — sahte bir hedef uydurmak yerine.
+      skipIfTargetNotPresent: true,
+      onFinish: () {
+        if (mounted) setState(() => _onboardingTourActive = false);
+        final uid = user?.uid;
+        if (uid != null) {
+          OnboardingFlags.markCompleted(uid, OnboardingFlags.home);
+        }
+      },
+      onDismiss: (_) {
+        if (mounted) setState(() => _onboardingTourActive = false);
+      },
+    );
     if (user != null) {
       _userStream = FirebaseFirestore.instance
           .collection('users')
@@ -924,6 +970,53 @@ class _HomePageState extends State<HomePage> {
     ],
   );
 
+  /// İlaç kartındaki "İçtim" hap butonu — itemBuilder içinden hem düz
+  /// (index != 0) hem de onboarding Showcase.withWidget'ının `child`'ı olarak
+  /// (index == 0) çağrılıyor, tek doğruluk kaynağı burası.
+  Widget _buildIcTimButton(
+    String docId,
+    String medName,
+    bool isTakenToday,
+    String today,
+  ) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          // Tur açıkken (spotlight overlay'i translucent olduğu için gerçek
+          // dokunuş buraya da ulaşabiliyor) gerçek bir "ilaç alındı" yazması
+          // tetiklenmesin — bkz. _onboardingTourActive alanındaki not.
+          if (_onboardingTourActive) return;
+          _toggleTaken(docId, medName, isTakenToday, today);
+        },
+        borderRadius: BorderRadius.circular(24),
+        child: Container(
+          height: 48,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            color: const Color(0xFF4DB6AC),
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.check, color: Colors.white, size: 20),
+              const SizedBox(width: 6),
+              Text(
+                "İçtim",
+                style: GoogleFonts.poppins(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildHeader(String firstName) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 10, 20, 4),
@@ -990,45 +1083,124 @@ class _HomePageState extends State<HomePage> {
   /// SOS artık başlık satırındaki küçük bir "hap" buton değil, kendi
   /// tam-genişlik satırında — acil durum eylemi için daha büyük/belirgin
   /// bir dokunma hedefi. Davranış (onTap) değişmedi, sadece boyut/konum.
+  ///
+  /// PRODUCT_NOTES'un "SOS ikiye bölünür gibi düşünülebilir: solda SOS, sağda
+  /// Nasıl Kullanılır" önerisiyle satır artık ikiye bölündü: solda (daha
+  /// geniş, flex:3) SOS kırmızısı, sağda (flex:2) mor/lavanta "Yardım Al" —
+  /// SOS'un aciliyet algısıyla karışmaması için bilinçli olarak ayrı bir
+  /// renk ailesi (bkz. AppColors.helpAccent).
   Widget _buildSOSButton() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
-      child: GestureDetector(
-        onTap: () => _showSOSConfirmDialog(),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          decoration: BoxDecoration(
-            color: const Color(0xFFE53935),
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.redAccent.withOpacity(0.35),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 3,
+            child: Showcase.withWidget(
+              key: _sosShowcaseKey,
+              scope: _homeTourScope,
+              targetPadding: const EdgeInsets.all(4),
+              container: OnboardingTooltipCard(
+                title: "Acil Durum (SOS)",
+                description:
+                    "Yardıma ihtiyacın olduğunda bu kırmızı butona dokun — "
+                    "yakının anında haberdar olur.",
+                buttonLabel: "Anladım",
+                onNext: () => _homeTourView.next(force: true),
+                showCloseButton: _onboardingTourIsManual,
+                onClose: () => _homeTourView.dismiss(),
               ),
-            ],
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(
-                Icons.notifications_active,
-                color: Colors.white,
-                size: 26,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                "SOS",
-                style: GoogleFonts.poppins(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 20,
+              child: GestureDetector(
+                onTap: () {
+                  // Tur açıkken (spotlight overlay'i translucent olduğu için
+                  // gerçek dokunuş buraya da ulaşabiliyor) gerçek bir SOS
+                  // tetiklenmesin — bkz. _onboardingTourActive alanındaki not.
+                  if (_onboardingTourActive) return;
+                  _showSOSConfirmDialog();
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE53935),
+                    borderRadius: BorderRadius.circular(18),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.redAccent.withOpacity(0.35),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(
+                        Icons.notifications_active,
+                        color: Colors.white,
+                        size: 26,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        "SOS",
+                        style: GoogleFonts.poppins(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 20,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ],
+            ),
           ),
-        ),
+          const SizedBox(width: 10),
+          Expanded(
+            flex: 2,
+            child: GestureDetector(
+              onTap: _startHomeTourManually,
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: BoxDecoration(
+                  color: AppColors.helpAccent,
+                  borderRadius: BorderRadius.circular(18),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.helpAccent.withOpacity(0.35),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.help_outline_rounded,
+                      color: Colors.white,
+                      size: 22,
+                    ),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          "Yardım Al",
+                          maxLines: 1,
+                          style: GoogleFonts.poppins(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1363,6 +1535,7 @@ class _HomePageState extends State<HomePage> {
                 } else {
                   firstName = user!.email?.split('@').first ?? "Kullanıcı";
                 }
+                _maybeStartHomeOnboarding(userData);
               }
 
               return StreamBuilder<QuerySnapshot>(
@@ -1856,70 +2029,73 @@ class _HomePageState extends State<HomePage> {
                                                               // yeniden sadece İçtim içeriyor, isim/saat
                                                               // bloğuyla benzer yükseklikte olduğu için
                                                               // .center doğal/dengeli çalışıyor.
-                                                              Material(
-                                                                color: Colors
-                                                                    .transparent,
-                                                                child: InkWell(
-                                                                  onTap: () =>
-                                                                      _toggleTaken(
-                                                                        medicine
-                                                                            .id,
-                                                                        medName,
-                                                                        isTakenToday,
-                                                                        today,
-                                                                      ),
-                                                                  borderRadius:
-                                                                      BorderRadius.circular(
-                                                                        24,
-                                                                      ),
-                                                                  child: Container(
-                                                                    height: 48,
-                                                                    padding: const EdgeInsets.symmetric(
-                                                                      horizontal:
-                                                                          14,
-                                                                    ),
-                                                                    decoration: BoxDecoration(
-                                                                      color: const Color(
-                                                                        0xFF4DB6AC,
-                                                                      ),
-                                                                      borderRadius:
-                                                                          BorderRadius.circular(
-                                                                            24,
+                                                              // İlk (index 0)
+                                                              // İçtim butonu
+                                                              // onboarding
+                                                              // turunun
+                                                              // spotlight
+                                                              // hedefi —
+                                                              // sıralama
+                                                              // önce
+                                                              // alınmamışları
+                                                              // gösterdiği
+                                                              // için index 0
+                                                              // her zaman bu
+                                                              // dalda
+                                                              // (isTakenToday
+                                                              // == false).
+                                                              // Hedef hiç
+                                                              // render
+                                                              // edilmezse
+                                                              // (ör. bugün
+                                                              // hiç ilaç
+                                                              // yoksa) tur
+                                                              // skipIfTargetNotPresent
+                                                              // ile bu adımı
+                                                              // sessizce
+                                                              // atlar.
+                                                              index == 0
+                                                                  ? Showcase.withWidget(
+                                                                      key:
+                                                                          _icTimShowcaseKey,
+                                                                      scope:
+                                                                          _homeTourScope,
+                                                                      targetPadding:
+                                                                          const EdgeInsets.all(
+                                                                            4,
                                                                           ),
-                                                                    ),
-                                                                    child: Row(
-                                                                      mainAxisSize:
-                                                                          MainAxisSize
-                                                                              .min,
-                                                                      children: [
-                                                                        const Icon(
-                                                                          Icons
-                                                                              .check,
-                                                                          color:
-                                                                              Colors.white,
-                                                                          size:
-                                                                              20,
-                                                                        ),
-                                                                        const SizedBox(
-                                                                          width:
-                                                                              6,
-                                                                        ),
-                                                                        Text(
-                                                                          "İçtim",
-                                                                          style: GoogleFonts.poppins(
-                                                                            color:
-                                                                                Colors.white,
-                                                                            fontSize:
-                                                                                15,
-                                                                            fontWeight:
-                                                                                FontWeight.w700,
+                                                                      container: OnboardingTooltipCard(
+                                                                        title:
+                                                                            "İlacını Aldığında",
+                                                                        description:
+                                                                            "İlacını içtiğinde bu butona dokun — "
+                                                                            "yakının haberdar olsun, sen de puan kazan.",
+                                                                        buttonLabel:
+                                                                            "Anladım, Başlayalım!",
+                                                                        onNext: () =>
+                                                                            _homeTourView.next(
+                                                                              force: true,
+                                                                            ),
+                                                                        showCloseButton:
+                                                                            _onboardingTourIsManual,
+                                                                        onClose: () =>
+                                                                            _homeTourView.dismiss(),
+                                                                      ),
+                                                                      child:
+                                                                          _buildIcTimButton(
+                                                                            medicine.id,
+                                                                            medName,
+                                                                            isTakenToday,
+                                                                            today,
                                                                           ),
-                                                                        ),
-                                                                      ],
+                                                                    )
+                                                                  : _buildIcTimButton(
+                                                                      medicine
+                                                                          .id,
+                                                                      medName,
+                                                                      isTakenToday,
+                                                                      today,
                                                                     ),
-                                                                  ),
-                                                                ),
-                                                              ),
                                                           ],
                                                         ),
                                                         const SizedBox(
@@ -2025,9 +2201,48 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  /// Home sekmesine ilk girişte (userSnap verisi ilk kez geldiğinde) bir kez
+  /// çağrılır — `_hasCheckedHomeOnboarding` bayrağı, bu sayfa açık kaldığı
+  /// sürece userStream'in (ör. İçtim sonrası totalScore güncellemesiyle)
+  /// tekrar tekrar tetiklenmesinde turun yeniden başlamasını önler.
+  void _maybeStartHomeOnboarding(Map<String, dynamic>? userData) {
+    if (_hasCheckedHomeOnboarding) return;
+    _hasCheckedHomeOnboarding = true;
+    if (OnboardingFlags.isCompletedFromData(userData, OnboardingFlags.home)) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() {
+        _onboardingTourActive = true;
+        _onboardingTourIsManual = false;
+      });
+      _homeTourView.startShowCase([_sosShowcaseKey, _icTimShowcaseKey]);
+    });
+  }
+
+  /// "Yardım Al" butonu — daha önce tamamlanmış olsa bile turu manuel olarak
+  /// yeniden başlatır. Manuel modda tooltip kartında bir kapatma (X) ikonu
+  /// belirir (bkz. _onboardingTourIsManual → OnboardingTooltipCard).
+  void _startHomeTourManually() {
+    setState(() {
+      _onboardingTourActive = true;
+      _onboardingTourIsManual = true;
+    });
+    // setState'in tetiklediği rebuild tamamlanmadan startShowCase çağrılırsa
+    // Showcase.withWidget'ın container'ı (OnboardingTooltipCard) hâlâ eski
+    // _onboardingTourIsManual değeriyle (false, kapatma ikonu gizli) inşa
+    // edilmiş olabilir — post-frame callback bu sırayı garanti eder.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _homeTourView.startShowCase([_sosShowcaseKey, _icTimShowcaseKey]);
+    });
+  }
+
   @override
   void dispose() {
     _relationsSubscription?.cancel();
+    _homeTourView.unregister();
     super.dispose();
   }
 }

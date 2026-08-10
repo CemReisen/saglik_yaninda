@@ -5,9 +5,12 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:showcaseview/showcaseview.dart';
 import 'package:saglik_yaninda/main.dart';
 import 'package:saglik_yaninda/services/notification_service.dart';
+import 'package:saglik_yaninda/services/onboarding_service.dart';
 import 'package:saglik_yaninda/core/theme/app_colors.dart';
+import 'package:saglik_yaninda/widgets/onboarding/onboarding_tooltip_card.dart';
 
 class AddMedicinePage extends StatefulWidget {
   const AddMedicinePage({super.key});
@@ -128,9 +131,40 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
   bool _isOffline = false;
   StreamSubscription<dynamic>? _connectivitySubscription;
 
+  // --- Onboarding turu (Ekle) ----------------------------------------------
+  // Bu sayfa (diğerlerinden farklı olarak) user dokümanını hiç dinlemiyor —
+  // tek seferlik bir okuma ile tamamlanma bayrağı kontrol ediliyor (bkz.
+  // OnboardingFlags.isCompleted). Kısa/tek adımlı bir tur: sadece "Kaydet ve
+  // Planla" butonu spotlight'lanıyor - form karmaşık/çok alanlı olduğu için
+  // tek bir "kritik" hedef bu (bkz. araştırma raporu).
+  static const String _addTourScope = 'add_onboarding';
+  final GlobalKey _saveButtonShowcaseKey = GlobalKey();
+  late final ShowcaseView _addTourView;
+  bool _onboardingTourActive = false;
+  bool _onboardingTourIsManual = false;
+
   @override
   void initState() {
     super.initState();
+    _addTourView = ShowcaseView.register(
+      scope: _addTourScope,
+      disableBarrierInteraction: true,
+      skipIfTargetNotPresent: true,
+      // "Kaydet ve Planla" formun altında, ekranın dışında kalabilir —
+      // spotlight başlarken ekran otomatik oraya kaydırılsın diye.
+      enableAutoScroll: true,
+      onFinish: () {
+        if (mounted) setState(() => _onboardingTourActive = false);
+        final uid = FirebaseAuth.instance.currentUser?.uid;
+        if (uid != null) {
+          OnboardingFlags.markCompleted(uid, OnboardingFlags.add);
+        }
+      },
+      onDismiss: (_) {
+        if (mounted) setState(() => _onboardingTourActive = false);
+      },
+    );
+    _maybeStartAddOnboarding();
     _checkInitialConnectivity();
     _connectivitySubscription = Connectivity().onConnectivityChanged.listen((
       dynamic result,
@@ -160,6 +194,27 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
     }
   }
 
+  /// Sayfa açılışında bir kez çağrılır (initState) — user dokümanını hiç
+  /// dinlemediğimiz için burada tek seferlik bir Firestore okuması gerekiyor
+  /// (diğer sayfalardaki gibi zaten akan bir stream'e "bedava" bakamıyoruz).
+  Future<void> _maybeStartAddOnboarding() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    final completed = await OnboardingFlags.isCompleted(
+      uid,
+      OnboardingFlags.add,
+    );
+    if (completed || !mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() {
+        _onboardingTourActive = true;
+        _onboardingTourIsManual = false;
+      });
+      _addTourView.startShowCase([_saveButtonShowcaseKey]);
+    });
+  }
+
   @override
   void dispose() {
     _connectivitySubscription?.cancel();
@@ -167,6 +222,7 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
     _nameFocusNode.dispose();
     _doseController.dispose();
     _descController.dispose();
+    _addTourView.unregister();
     super.dispose();
   }
 
@@ -927,23 +983,44 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
               ),
               const SizedBox(height: 30),
 
-              SizedBox(
-                width: double.infinity,
-                height: 55,
-                child: ElevatedButton(
-                  onPressed: _saveMedicine,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF4DB6AC),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
+              Showcase.withWidget(
+                key: _saveButtonShowcaseKey,
+                scope: _addTourScope,
+                targetPadding: const EdgeInsets.all(4),
+                container: OnboardingTooltipCard(
+                  title: "İlaç Ekleme",
+                  description:
+                      "Bilgileri doldurduktan sonra buraya dokunarak ilacı "
+                      "kaydet — hatırlatıcılar otomatik kurulur.",
+                  buttonLabel: "Anladım",
+                  onNext: () => _addTourView.next(force: true),
+                  showCloseButton: _onboardingTourIsManual,
+                  onClose: () => _addTourView.dismiss(),
+                ),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 55,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      // Tur açıkken (spotlight overlay'i translucent olduğu
+                      // için gerçek dokunuş buraya da ulaşabiliyor) formun
+                      // yarım/eksik halde gerçekten kaydedilmesini önle.
+                      if (_onboardingTourActive) return;
+                      _saveMedicine();
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF4DB6AC),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
                     ),
-                  ),
-                  child: Text(
-                    "Kaydet ve Planla",
-                    style: GoogleFonts.poppins(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                    child: Text(
+                      "Kaydet ve Planla",
+                      style: GoogleFonts.poppins(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 ),

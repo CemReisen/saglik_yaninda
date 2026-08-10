@@ -4,10 +4,97 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:showcaseview/showcaseview.dart';
 import 'package:saglik_yaninda/core/theme/app_colors.dart';
+import 'package:saglik_yaninda/services/onboarding_service.dart';
+import 'package:saglik_yaninda/widgets/onboarding/onboarding_tooltip_card.dart';
 
-class ProfilePage extends StatelessWidget {
+// StatelessWidget'tan StatefulWidget'a çevrildi (2026-08-10, onboarding turu
+// için) - bu sayfanın kendisi hiçbir alan/constructor parametresi
+// kullanmıyordu, aşağıdaki tüm metodlar context/uid gibi parametreleri açıkça
+// alıyordu - dönüşüm mekanik: gövde State sınıfına taşındı, hiçbir metod
+// imzası değişmedi.
+class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
+
+  @override
+  State<ProfilePage> createState() => _ProfilePageState();
+}
+
+class _ProfilePageState extends State<ProfilePage> {
+  // --- Onboarding turu (Profil) --------------------------------------------
+  // Tek adımlı, kısa bir tur: sadece "Aile Bağlantı Kodum" kartı
+  // spotlight'lanıyor (bkz. araştırma raporu).
+  static const String _profileTourScope = 'profile_onboarding';
+  final GlobalKey _connectionCodeShowcaseKey = GlobalKey();
+  late final ShowcaseView _profileTourView;
+  bool _hasCheckedProfileOnboarding = false;
+  bool _onboardingTourActive = false;
+  bool _onboardingTourIsManual = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _profileTourView = ShowcaseView.register(
+      scope: _profileTourScope,
+      disableBarrierInteraction: true,
+      skipIfTargetNotPresent: true,
+      onFinish: () {
+        if (mounted) setState(() => _onboardingTourActive = false);
+        final uid = FirebaseAuth.instance.currentUser?.uid;
+        if (uid != null) {
+          OnboardingFlags.markCompleted(uid, OnboardingFlags.profile);
+        }
+      },
+      onDismiss: (_) {
+        if (mounted) setState(() => _onboardingTourActive = false);
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _profileTourView.unregister();
+    super.dispose();
+  }
+
+  /// userSnapshot verisi ilk kez geldiğinde bir kez çağrılır — bu sayfadaki
+  /// StreamBuilder her alan güncellemesinde (ör. bir switch değiştirildiğinde)
+  /// yeniden tetiklendiği için `_hasCheckedProfileOnboarding` bayrağı turun
+  /// tekrar tekrar başlamasını önler.
+  void _maybeStartProfileOnboarding(Map<String, dynamic> userData) {
+    if (_hasCheckedProfileOnboarding) return;
+    _hasCheckedProfileOnboarding = true;
+    if (OnboardingFlags.isCompletedFromData(
+      userData,
+      OnboardingFlags.profile,
+    )) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() {
+        _onboardingTourActive = true;
+        _onboardingTourIsManual = false;
+      });
+      _profileTourView.startShowCase([_connectionCodeShowcaseKey]);
+    });
+  }
+
+  /// "Tekrar Öğren" satırı — PRODUCT_NOTES'un "Profilde de yedek erişim
+  /// noktası" gereksinimi (bkz. araştırma raporu, "Nasıl Kullanılır" butonu
+  /// bölümü). Ana tetikleyici Home'daki "Yardım Al" - bu, kullanıcı Profil'e
+  /// gelmişken bağlantı kodu kartını tekrar görmek isterse yedek bir yol.
+  void _startProfileTourManually() {
+    setState(() {
+      _onboardingTourActive = true;
+      _onboardingTourIsManual = true;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _profileTourView.startShowCase([_connectionCodeShowcaseKey]);
+    });
+  }
 
   Future<void> _updateProfileData(
     String uid,
@@ -271,6 +358,14 @@ class ProfilePage extends StatelessWidget {
         int totalScore = userData['totalScore'] ?? 0;
         String connectionCode = userData['connectionCode'] ?? "Kod Yok";
 
+        // Sadece gerçek veri geldiğinde kontrol et - userSnapshot.data henüz
+        // null'ken (ilk yüklemenin ConnectionState.waiting anı) userData boş
+        // bir map'e düşüyor, bu "alan yok = tamamlanmadı" ile karışıp turu
+        // erken/eksik veriyle (ör. "Kod Yok" yazan kartla) başlatmasın diye.
+        if (userSnapshot.hasData && userSnapshot.data!.exists) {
+          _maybeStartProfileOnboarding(userData);
+        }
+
         SharedPreferences.getInstance().then((prefs) {
           prefs.setBool('notifications', notifications);
           prefs.setBool(
@@ -315,7 +410,22 @@ class ProfilePage extends StatelessWidget {
                     user.email ?? "",
                     user.uid,
                   ),
-                  _buildConnectionCodeCard(connectionCode, context),
+                  Showcase.withWidget(
+                    key: _connectionCodeShowcaseKey,
+                    scope: _profileTourScope,
+                    targetPadding: const EdgeInsets.all(4),
+                    container: OnboardingTooltipCard(
+                      title: "Aile Bağlantı Kodun",
+                      description:
+                          "Bu kodu bir yakınınla paylaş — seni takip edip "
+                          "ilaçlarını hatırlatabilsin.",
+                      buttonLabel: "Anladım",
+                      onNext: () => _profileTourView.next(force: true),
+                      showCloseButton: _onboardingTourIsManual,
+                      onClose: () => _profileTourView.dismiss(),
+                    ),
+                    child: _buildConnectionCodeCard(connectionCode, context),
+                  ),
                   Row(
                     children: [
                       _buildStatItem(
@@ -374,6 +484,12 @@ class ProfilePage extends StatelessWidget {
                         "Sessiz Bildirim",
                         silentMode,
                         "silentMode",
+                        isLast: false,
+                      ),
+                      _buildHelpRow(
+                        "Tekrar Öğren",
+                        "Bağlantı kodu turunu tekrar izle",
+                        _startProfileTourManually,
                         isLast: true,
                       ),
                     ],
@@ -655,6 +771,57 @@ class ProfilePage extends StatelessWidget {
     );
   }
 
+  /// "Tekrar Öğren" satırı — PRODUCT_NOTES'un Profil'de istediği yedek
+  /// onboarding erişim noktası. Diğer satırlarla (_buildSelectRow/
+  /// _buildSwitchRow) aynı ListTile deseni, farkı: mor/lavanta ikon
+  /// (AppColors.helpAccent) - "yardım" kimliğinin Home'daki "Yardım Al"
+  /// butonuyla tutarlı kalması için.
+  Widget _buildHelpRow(
+    String label,
+    String subtitle,
+    VoidCallback onTap, {
+    required bool isLast,
+  }) {
+    return Column(
+      children: [
+        ListTile(
+          onTap: onTap,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+          leading: const Icon(
+            Icons.replay_circle_filled_rounded,
+            color: AppColors.helpAccent,
+          ),
+          title: Text(
+            label,
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              color: Colors.black87,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          subtitle: Text(
+            subtitle,
+            style: GoogleFonts.poppins(
+              fontSize: 13,
+              color: AppColors.textSecondaryStrong,
+            ),
+          ),
+          trailing: const Icon(
+            Icons.chevron_right_rounded,
+            color: Colors.grey,
+          ),
+        ),
+        if (!isLast)
+          Divider(
+            height: 1,
+            indent: 20,
+            endIndent: 20,
+            color: Colors.grey.withOpacity(0.1),
+          ),
+      ],
+    );
+  }
+
   Widget _buildLogoutButton(BuildContext context) {
     return SizedBox(
       width: double.infinity,
@@ -770,6 +937,10 @@ class ProfilePage extends StatelessWidget {
             ),
             child: IconButton(
               onPressed: () {
+                // Tur açıkken (spotlight overlay'i translucent olduğu için
+                // gerçek dokunuş buraya da ulaşabiliyor) "Anladım" yerine
+                // yanlışlıkla kopyalama tetiklenmesin.
+                if (_onboardingTourActive) return;
                 Clipboard.setData(ClipboardData(text: code));
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
