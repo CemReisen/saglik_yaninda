@@ -62,6 +62,18 @@ Caregiver kendi sesiyle kısa bir ses kaydı yapıp bildirim sesinin yerine koya
 - **Görsel ağırlık:** Büyük ve dikkat çekici olmalı ama SOS'un kırmızısıyla **karışmamalı** — farklı bir renkte olmalı ki SOS'un aciliyet algısı gölgelenmesin.
 - Ayrıca Profil sayfasında da erişilebilir bir "Tekrar Öğren" seçeneği bulunmalı (yedek erişim noktası).
 
+### Uygulama Durumu — TAMAMLANDI ✅ (son güncelleme 2026-08-10)
+Yukarıdaki gereksinimler uygulandı. Home ekranı turu, showcaseview paketiyle spotlight/vurgu tarzında, iki dalgalı ve şu an **8 adımlı**:
+
+- **Dalga 1 (5 adım):** SOS, Yardım Al (yukarıdaki "Nasıl Kullanılır" butonunun karşılığı — SOS'un yanında, ayrı renkte), İlaç Listesi, zaman dilimi filtreleri (Sabah/Öğle/Akşam/Gece çipleri), alt navbar.
+- **Dalga 2 (3 adım, ilk ilaç eklendikten sonra tetiklenir):** tekil ilaç kartı → **Otomatik/Manuel zaman dilimi toggle'ı** (yeni, 2026-08-10) → İçtim butonu.
+
+Add ve Profil sayfalarının da kendi (ayrı, tek adımlı) tanıtım turları var. "Yardım Al" butonu turu istenildiği zaman baştan tekrar başlatabiliyor. Teknik detaylar, mimari kararlar ve commit geçmişi için bkz. `CLAUDE.md`.
+
+**Otomatik/Manuel zaman dilimi toggle'ı (2026-08-10 eklendi) — ne işe yarar:** İlaç Listesi kartı normalde günün 4 zaman dilimine (sabah/öğle/akşam/gece) göre otomatik filtreleniyor - kullanıcı sadece o anki dilimi görüyor. Sorun: kullanıcı sadece sabah ilacı kullanıyorsa, öğleden sonra kart hep boş görünüyordu. Kartın sağ üst köşesindeki saat ikonu bunu çözüyor:
+- **Otomatik (varsayılan):** kart günün gerçek saatine göre dilim gösterir (mevcut/eski davranış), çipler "göz atma" amaçlı dokunulabilir ama seçim hiçbir yere kaydedilmez.
+- **Manuel:** butonu açarken kart her zaman "Sabah"tan başlar; kullanıcının seçtiği dilim kalıcı ("yapışkan") olarak hatırlanır — saat ilerlese/uygulama kapanıp açılsa da buton tekrar kapatılana kadar değişmez. Kapatılınca otomatik moda döner.
+
 ---
 
 ## 4. Elder Kayıt / Giriş Akışı ve Yeni Cihaz Kurtarma
@@ -139,12 +151,12 @@ Hızlı Başla ile açılmış bir elder hesabının, Google/email ile açılmı
 ## Özet — Öncelik Sırası (Önerilen)
 
 1. **Kusursuz elder deneyimi** (mevcut UI revizyonu, bugüne kadarki çalışma) — devam ediyor.
-2. **Onboarding turu** — yüksek öncelik, temel kullanılabilirlik sorunu.
+2. ~~Onboarding turu~~ → **TAMAMLANDI ✅** — Home (8 adım, iki dalga, artık Otomatik/Manuel zaman dilimi toggle'ı dahil) + Add/Profil (tek adımlı) turları uygulandı, bkz. yukarısı "3. Onboarding / Kullanıcı Eğitimi → Uygulama Durumu" ve `CLAUDE.md`.
 3. ~~Telefon+SMS giriş akışı~~ → **Google + Email + Hızlı Başla + Kurtarma Kodu — TAMAMLANDI ✅ (2026-08-10)**, bkz. "4. Elder Kayıt / Giriş Akışı ve Yeni Cihaz Kurtarma" + `CLAUDE.md`. Kalan tek açık madde: Hızlı Başla × caregiver bağlantı çapraz testi (bkz. yukarısı, "Bilinen eksik test").
 4. **Play Store lansmanı** (Android-only, web dashboard olmadan).
 5. **Lansman sonrası:** monetizasyon özellikleri, caregiver web dashboard, iOS stratejisi.
 
-**Sıradaki öncelik netleşmedi** — `ui-redesign` dalının merge edilmesi mi (henüz `main`'e/`feature/ui-shell`'e merge bekliyor), yoksa yukarıdaki eksik çapraz test mi, yoksa onboarding turu mu önce gelmeli? Bir sonraki oturumda netleştirilmeli.
+**Sıradaki öncelik netleşmedi** — `ui-redesign` dalının merge edilmesi mi (henüz `main`'e/`feature/ui-shell`'e merge bekliyor), yoksa yukarıdaki eksik çapraz test mi önce gelmeli? Bir sonraki oturumda netleştirilmeli.
 
 ---
 

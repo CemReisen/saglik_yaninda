@@ -210,3 +210,32 @@ Commit `6e6e87d` (backend), `c6b0e9f` (client, `recovery_code_page.dart`).
 - **YAPILMADI — bir sonraki oturumun ilk işi olmalı:** Hızlı Başla elder hesabı + Google/email caregiver bağlantısı çapraz testi — bildirimlerin (bağlantı isteği, ilaç alındı, SOS, dürtme) yeni auth yöntemleriyle açılmış hesaplarda da uçtan uca çalıştığının doğrulanması. Çift cihaz/hesap gerektiriyor, henüz test edilemedi.
 
 **Doğrulama:** Her commit'te `flutter analyze` çalıştırıldı — 0 hata boyunca; info/warning sayısı oturum başındaki 88'den (eklenen yeni sayfalar + tekrarlayan `withOpacity` deseniyle) 91'e çıktı, yeni bir sorun kategorisi değil.
+
+## Home: Otomatik/Manuel zaman dilimi toggle'ı + onboarding dalga 2 genişletildi (2026-08-10)
+
+`ui-redesign` dalında, 3 commit: `84bc178` (özellik + ilk onboarding bağlantısı), `9614e66` (crash fix + ara UX düzeltmesi), `c2752d3` (**davranış baştan yeniden tasarlandı — bkz. aşağıdaki uyarı**).
+
+**⚠️ Önemli — `84bc178`'in tanımını referans almayın:** İlk turda özellik "Tümünü Göster" olarak uygulanmıştı (buton açıkken kart, seçili zaman diliminden bağımsız günün TÜM ilaçlarını listeliyordu). Bu **yanlış anlaşılmıştı** ve `c2752d3`'te davranış tamamen değiştirildi. Aşağıdaki tanım GÜNCEL ve DOĞRU olanı — `home_page.dart`'ta `_showAllPeriods`/`_effectiveShowAllPeriods` gibi isimler artık YOK, hepsi `_manualPeriodMode`/`_effectiveManualMode` olarak yeniden adlandırıldı.
+
+### Güncel/doğru davranış
+
+İlaç Listesi kartının sağ üst köşesinde bir saat ikonu (`Icons.schedule` boş ↔ `Icons.access_time_filled` dolu, + renk farkı) **Otomatik** ile **Manuel** mod arasında geçiş yapar:
+
+- **Otomatik (varsayılan, buton kapalı):** mevcut/eski davranışla birebir aynı — kart günün gerçek saatine göre otomatik dilim gösterir (`_periodForHour(DateTime.now().hour)`). Sabah/Öğle/Akşam/Gece çipleri dokunulabilir ("göz atma" — `_selectedPeriod`'u geçici değiştirir ama hiçbir yere kaydedilmez, bir sonraki açılışta yeniden gerçek saate göre hesaplanır).
+- **Manuel (buton açık):** butonu **açarken** `_selectedPeriod` her zaman "Sabah"a sıfırlanır (saatten bağımsız sabit başlangıç noktası — son manuel seçim GERİ GETİRİLMİYOR, bilinçli ürün kararı). Sonrasında kullanıcının seçtiği çip SharedPreferences'a **"yapışkan"** kaydedilir (`home_manual_selected_period`) — uygulama kapanıp açılsa da, saat ilerlese de, buton tekrar kapatılıp açılana kadar değişmez. Çipler Manuel modda da tam aktif (Otomatik'ten hiçbir farkı yok — ara turda eklenen `IgnorePointer`/soluklaştırma denemesi kafa karıştırıcı bulunup tamamen kaldırıldı).
+- Buton **kapatılınca**: otomatik moda dönülür, `_selectedPeriod` sıfırdan gerçek saate göre yeniden hesaplanır.
+- Toggle'ın açık/kapalı durumu (`home_manual_period_mode`) ve manuel moddaki seçili dilim (`home_manual_selected_period`) ayrı ayrı SharedPreferences'ta kalıcı.
+
+### Onboarding bağlantısı 1: `forceManualPeriod` (crash fix'i de içerir)
+
+Dalga 2'nin (kart + toggle + İçtim) hedefi mevcut seçili dilimde yoksa (ör. akşam saatlerinde sabah dilimine ilaç eklenmişse) filtrelenmiş liste boş kalır, `skipIfTargetNotPresent` adımları sessizce atlar. Çözüm: tur başlamadan önce GEÇİCİ olarak Manuel moda geçilip hedef ilacın dilimi seçiliyor (`_onboardingForceManualMode` + `_selectedPeriodBeforeOnboardingOverride`, `home_page.dart` → `_runOnboardingSequence`) — kullanıcının kalıcı tercihine dokunulmuyor, tur bitince (`onFinish`/`onDismiss`/hata → `_restoreFromOnboardingPeriodOverride`) otomatik geri dönülüyor.
+
+**Crash fix (`9614e66`):** Bu mekanizmanın ilk halinde eklenen koşulsuz ekstra `postFrameCallback`, Add sayfasından ilaç kaydedip `Navigator.pushAndRemoveUntil` ile yeni bir `MainLayout`/`HomePage` mount edilirken "No ShowcaseView registered for scope 'home_onboarding'" crash'ini tetikliyordu — kök sebep: showcaseview paketi (`ShowcaseService`) scope→ShowcaseView eşlemesini global, tek bir Map'te scope STRING'iyle tutuyor; Navigator'ın sayfa geçiş animasyonu yüzünden eski route'un `dispose()`'u (geç tetiklenen `unregister()`) yeni HomePage'in aynı scope string'i altındaki taze kaydını silebiliyor. Düzeltme: (a) ekstra frame bekleme artık sadece gerçekten gerekince (manuel tur ya da forced period) ekleniyor, (b) `startShowCase` çağrısı `try/catch`'e alındı — bu paket sınırlamasından kaynaklanan bir yarış olursa artık çökme yerine sessizce atlanıp bir sonraki Home ziyaretinde tekrar denenir.
+
+### Onboarding bağlantısı 2: yeni tur adımı
+
+Dalga 2 artık **3 adım**: kart → **Otomatik/Manuel dilim toggle'ı** (yeni, `_periodToggleShowcaseKey`) → İçtim. Toggle her zaman render edildiği için (ilaç sayısından bağımsız) bu adım hiç atlanmıyor; kart/İçtim'in hedefi hâlâ bugünün ilk alınmamış ilacı, yoksa `skipIfTargetNotPresent` ile ikisi de atlanıyor (dolayısıyla teorik bir uç durum var: o gün hiç ilacı olmayan bir kullanıcıda toggle adımı tek başına, kart/İçtim'siz görünebilir — bilinçli olarak ele alınmadı, düşük öncelik).
+
+Toplam Home turu artık **8 adım** (bkz. PRODUCT_NOTES.md → "3. Onboarding").
+
+**Kullanıcı cihazda test edip onayladı.** `flutter analyze`: her commit'te 0 yeni hata (95 info/warning, projede zaten var olan desenlerin tekrarı).
