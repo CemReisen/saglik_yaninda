@@ -1584,15 +1584,15 @@ class _HomePageState extends State<HomePage> {
             builder: (context, userSnap) {
               String firstName = "Kullanıcı";
 
+              Map<String, dynamic>? userData;
               if (userSnap.hasData && userSnap.data!.exists) {
-                var userData = userSnap.data!.data() as Map<String, dynamic>;
+                userData = userSnap.data!.data() as Map<String, dynamic>;
                 String fullName = userData['name'] ?? "";
                 if (fullName.isNotEmpty) {
                   firstName = fullName.trim().split(' ').first;
                 } else {
                   firstName = user!.email?.split('@').first ?? "Kullanıcı";
                 }
-                _maybeStartHomeOnboarding(userData);
               }
 
               return StreamBuilder<QuerySnapshot>(
@@ -1611,6 +1611,30 @@ class _HomePageState extends State<HomePage> {
 
                   if (!snapshot.hasData)
                     return const Center(child: CircularProgressIndicator());
+
+                  // Bug fix (gerçek cihazda bulundu): burada, İKİ stream'in
+                  // (user doc + medicines) ikisi de en az bir kez veri
+                  // getirmiş olduğu garanti - bundan önce (outer/user doc
+                  // builder'ında) çağrılsaydı, medicines stream'i henüz
+                  // hiç veri getirmemişken (ör. Add sayfasından "Kaydet ve
+                  // Planla" sonrası TAMAMEN YENİ bir MainLayout/HomePage
+                  // mount olduğunda) tetiklenebiliyordu - o anda henüz
+                  // itemBuilder hiç çalışmadığı için dalga 2'nin hedef
+                  // widget'ları (medCard/İçtim) ağaçta YOK, skipIfTargetNotPresent
+                  // ikisini de sessizce atlıyor ve `_hasCheckedHomeOnboarding`
+                  // bir daha denenmeyecek şekilde true'ya kilitleniyordu -
+                  // yeni eklenen ilk ilaç, kart gerçekten hazır olsa bile
+                  // otomatik spotlight'lanamıyordu (sadece "Yardım Al" ile
+                  // manuel çağrıda görünüyordu, çünkü o zamana kadar veri
+                  // zaten yüklenmiş oluyordu).
+                  //
+                  // userData null ise (user doc snapshot'ı bu ilk framede
+                  // henüz gelmediyse) hiç denemiyoruz - `_hasCheckedHomeOnboarding`
+                  // henüz tüketilmediği için medicines stream'in BİR SONRAKİ
+                  // tetiklenmesinde (userData artık dolu olacağı için) tekrar
+                  // denenecek, yanlış (eksik veriyle hesaplanmış) bir "her şey
+                  // tamamlandı/eksik" kararı verip kilitlenmeyeceğiz.
+                  if (userData != null) _maybeStartHomeOnboarding(userData);
 
                   var allMedicines = snapshot.data!.docs;
                   String todayName = _getShortDayName();
@@ -2371,15 +2395,24 @@ class _HomePageState extends State<HomePage> {
   /// ikisi de atlanır.
   List<GlobalKey> get _wave2Keys => [_medCardShowcaseKey, _icTimShowcaseKey];
 
-  /// Home sekmesine her girişte (userSnap verisi ilk kez geldiğinde) bir kez
-  /// çağrılır — `_hasCheckedHomeOnboarding` bayrağı, BU SAYFA AÇIK KALDIĞI
-  /// sürece userStream'in (ör. İçtim sonrası totalScore güncellemesiyle)
-  /// tekrar tekrar tetiklenmesinde turun yeniden başlamasını önler. Sayfa
-  /// tab değişiminde dispose/yeniden mount olduğu için (bkz. main.dart →
-  /// MainLayout, `_pages[_currentIndex]`) her Home ziyaretinde bu kontrol
-  /// yeniden çalışır — ör. kullanıcı Ekle'de ilk ilacını ekleyip Home'a
-  /// dönünce, `homeIntro` zaten true olduğundan sadece dalga 2 (kart+İçtim)
-  /// denenir.
+  /// Home sekmesine her girişte, medicines stream'i ilk kez veri getirdiğinde
+  /// bir kez çağrılır — bilinçli olarak user doc stream'inden DEĞİL, medicines
+  /// stream'inin builder'ından çağrılıyor (bkz. çağrı sitesindeki "Bug fix"
+  /// notu): dalga 2'nin hedefleri (medCard/İçtim) itemBuilder'ın en az bir kez
+  /// gerçek veriyle çalışmış olmasını gerektiriyor, user doc genelde daha
+  /// erken geldiği için orada çağrılsaydı hedefler henüz ağaçta yokken
+  /// skipIfTargetNotPresent onları sessizce (ve kalıcı olarak, bir daha
+  /// denenmeden) atlıyordu.
+  ///
+  /// `_hasCheckedHomeOnboarding` bayrağı, BU SAYFA AÇIK KALDIĞI sürece
+  /// medicines stream'inin (ör. İçtim sonrası totalScore güncellemesiyle,
+  /// ki bu aslında user doc'u tetikler ama iç StreamBuilder da onunla
+  /// birlikte yeniden build olur) tekrar tekrar tetiklenmesinde turun
+  /// yeniden başlamasını önler. Sayfa tab değişiminde dispose/yeniden mount
+  /// olduğu için (bkz. main.dart → MainLayout, `_pages[_currentIndex]`) her
+  /// Home ziyaretinde bu kontrol yeniden çalışır — ör. kullanıcı Ekle'de ilk
+  /// ilacını ekleyip Home'a dönünce, `homeIntro` zaten true olduğundan
+  /// sadece dalga 2 (kart+İçtim) denenir.
   ///
   /// Dalga 1 ve dalga 2 BAĞIMSIZ bayraklarla takip edildiği için (bkz.
   /// OnboardingFlags dokümantasyonu) sadece tamamlanmamış olan dalga(lar)ın
