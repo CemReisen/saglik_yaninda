@@ -92,12 +92,23 @@ class _HomePageState extends State<HomePage> {
       // yeni bir elder hesabında henüz ilaç eklenmemişse) o adımı sessizce
       // atlayıp turu SOS'la bitirir — sahte bir hedef uydurmak yerine.
       skipIfTargetNotPresent: true,
+      // Bayraklar burada DEĞİL, her adım gerçekten tamamlandığında
+      // (onComplete) tek tek yazılıyor — bkz. OnboardingFlags dokümantasyonu.
+      // onComplete SADECE gerçekten gösterilip "Anladım" ile geçilen adımlar
+      // için tetikleniyor (skipIfTargetNotPresent ile atlanan bir adım için
+      // ateşlenmiyor, paket kaynağında doğrulandı) - bu yüzden İçtim
+      // atlanırsa homeMeds false kalır, bir sonraki ziyarette tekrar denenir.
+      onComplete: (index, key) {
+        final uid = user?.uid;
+        if (uid == null) return;
+        if (key == _sosShowcaseKey) {
+          OnboardingFlags.markCompleted(uid, OnboardingFlags.homeSos);
+        } else if (key == _icTimShowcaseKey) {
+          OnboardingFlags.markCompleted(uid, OnboardingFlags.homeMeds);
+        }
+      },
       onFinish: () {
         if (mounted) setState(() => _onboardingTourActive = false);
-        final uid = user?.uid;
-        if (uid != null) {
-          OnboardingFlags.markCompleted(uid, OnboardingFlags.home);
-        }
       },
       onDismiss: (_) {
         if (mounted) setState(() => _onboardingTourActive = false);
@@ -2201,23 +2212,42 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  /// Home sekmesine ilk girişte (userSnap verisi ilk kez geldiğinde) bir kez
-  /// çağrılır — `_hasCheckedHomeOnboarding` bayrağı, bu sayfa açık kaldığı
+  /// Home sekmesine her girişte (userSnap verisi ilk kez geldiğinde) bir kez
+  /// çağrılır — `_hasCheckedHomeOnboarding` bayrağı, BU SAYFA AÇIK KALDIĞI
   /// sürece userStream'in (ör. İçtim sonrası totalScore güncellemesiyle)
-  /// tekrar tekrar tetiklenmesinde turun yeniden başlamasını önler.
+  /// tekrar tekrar tetiklenmesinde turun yeniden başlamasını önler. Sayfa
+  /// tab değişiminde dispose/yeniden mount olduğu için (bkz. main.dart →
+  /// MainLayout, `_pages[_currentIndex]`) her Home ziyaretinde bu kontrol
+  /// yeniden çalışır — ör. kullanıcı Ekle'de ilk ilacını ekleyip Home'a
+  /// dönünce, `homeSos` zaten true olduğundan sadece İçtim adımı denenir.
+  ///
+  /// SOS ve İçtim BAĞIMSIZ bayraklarla takip edildiği için (bkz.
+  /// OnboardingFlags dokümantasyonu) sadece tamamlanmamış olan adım(lar)
+  /// `startShowCase`'e veriliyor - zaten tamamlanmış bir adım asla tekrar
+  /// otomatik gösterilmiyor.
   void _maybeStartHomeOnboarding(Map<String, dynamic>? userData) {
     if (_hasCheckedHomeOnboarding) return;
     _hasCheckedHomeOnboarding = true;
-    if (OnboardingFlags.isCompletedFromData(userData, OnboardingFlags.home)) {
-      return;
-    }
+    final bool sosDone = OnboardingFlags.isCompletedFromData(
+      userData,
+      OnboardingFlags.homeSos,
+    );
+    final bool medsDone = OnboardingFlags.isCompletedFromData(
+      userData,
+      OnboardingFlags.homeMeds,
+    );
+    final List<GlobalKey> pendingSteps = [
+      if (!sosDone) _sosShowcaseKey,
+      if (!medsDone) _icTimShowcaseKey,
+    ];
+    if (pendingSteps.isEmpty) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       setState(() {
         _onboardingTourActive = true;
         _onboardingTourIsManual = false;
       });
-      _homeTourView.startShowCase([_sosShowcaseKey, _icTimShowcaseKey]);
+      _homeTourView.startShowCase(pendingSteps);
     });
   }
 
