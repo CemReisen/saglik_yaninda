@@ -1937,16 +1937,19 @@ class _HomePageState extends State<HomePage> {
                                   // "Tümünü Göster" aktifken (kalıcı tercih ya
                                   // da onboarding'in geçici zorlaması) bu
                                   // çipler listenin görünümünü etkilemiyor -
-                                  // dokunuşları hâlâ çalışıyor (bir sonraki
-                                  // otomatik moda dönüşte hangi dilimin
-                                  // seçili olacağını belirlemeye devam
-                                  // ediyor) ama soluk gösterilerek "şu an
-                                  // etkisiz" olduğu ima ediliyor.
-                                  child: Opacity(
-                                    opacity: _effectiveShowAllPeriods
-                                        ? 0.4
-                                        : 1,
-                                    child: _buildPeriodChips(),
+                                  // IgnorePointer ile dokunuşları da
+                                  // TAMAMEN kapatıyoruz (soluk görünüp hâlâ
+                                  // tıklanabilir olmak "devre dışı" izlenimi
+                                  // verip kullanıcıyı yanıltıyordu). Otomatik
+                                  // moda dönünce tekrar aktif oluyorlar.
+                                  child: IgnorePointer(
+                                    ignoring: _effectiveShowAllPeriods,
+                                    child: Opacity(
+                                      opacity: _effectiveShowAllPeriods
+                                          ? 0.4
+                                          : 1,
+                                      child: _buildPeriodChips(),
+                                    ),
                                   ),
                                 ),
                                 const SizedBox(height: 8),
@@ -2670,16 +2673,48 @@ class _HomePageState extends State<HomePage> {
   /// tercihine DOKUNULMAZ, tur bitince (onFinish/onDismiss) otomatik geri
   /// alınır.
   ///
-  /// setState çağrısından sonra tek bir postFrameCallback ile startShowCase
-  /// çağrılıyor - bu, hem OnboardingTooltipCard'ın güncel
-  /// _onboardingTourIsManual değeriyle inşa edilmesini hem de (forceShowAll
-  /// durumunda) kart/İçtim hedefinin ağaca gerçekten eklenmiş olmasını
-  /// garanti ediyor: showcaseview paketinde bir Showcase'in controller'ı
-  /// kendi `initState`'inde SENKRON olarak kaydediliyor (bkz. paket
-  /// kaynağı, showcase.dart → _ShowcaseState.initState), yani setState'in
-  /// tetiklediği rebuild TAMAMLANDIKTAN sonra (bir sonraki frame'in
-  /// postFrameCallback'i) startShowCase çağrıldığında controller her zaman
-  /// hazır olur.
+  /// **Bir frame bekleme SADECE gerektiğinde ekleniyor** (bkz. `start()`'ın
+  /// çağrılış yeri) - iki AYRI sebepten biri varsa: (a) `manual` - tooltip
+  /// kartının (OnboardingTooltipCard) güncel `_onboardingTourIsManual`
+  /// değeriyle inşa edilmiş olması gerekiyor (kapatma/X ikonu doğru
+  /// görünsün diye), (b) `needsShowAllOverride` - kart/İçtim hedefinin
+  /// ağaca YENİ eklenmiş olması ve showcaseview'ın onun controller'ını
+  /// kaydetmiş olması gerekiyor (bir Showcase'in controller'ı kendi
+  /// `initState`'inde SENKRON kaydediliyor, bkz. paket kaynağı,
+  /// showcase.dart → _ShowcaseState.initState - yani setState'in
+  /// tetiklediği rebuild TAMAMLANDIKTAN sonra, bir sonraki frame'in
+  /// postFrameCallback'inde çağrıldığında controller her zaman hazır olur).
+  /// İkisi de gerekmiyorsa (yaygın durum: otomatik tetiklenen, hedefi zaten
+  /// mevcut zaman diliminde olan dalga) HİÇ beklemeden hemen başlatılıyor -
+  /// bkz. aşağıdaki "Bug fix" notu, gereksiz her ekstra frame bir yarış
+  /// koşulunu genişletiyordu.
+  ///
+  /// **Bug fix (gerçek cihazda bulundu, crash):** "No ShowcaseView
+  /// registered for scope 'home_onboarding'..." - Add sayfasından "Kaydet
+  /// ve Planla" sonrası `Navigator.pushAndRemoveUntil` ile TAMAMEN YENİ bir
+  /// MainLayout/HomePage mount ediliyor; yeni HomePage.initState()
+  /// `ShowcaseView.register(scope: homeTourScope, ...)` ile kaydını
+  /// SENKRON olarak yapıyor. Ama showcaseview'ın `ShowcaseService`'i
+  /// scope→ShowcaseView eşlemesini GLOBAL, tek bir Map'te (`_showcaseViews`)
+  /// scope STRING'iyle anahtarlıyor (bkz. paket kaynağı,
+  /// showcase_service.dart) - hangi ShowcaseView INSTANCE'ının kayıtlı
+  /// olduğuna bakmıyor. Navigator'ın sayfa geçiş animasyonu yüzünden eski
+  /// route (eski MainLayout içindeki başka bir sayfa/HomePage) hemen değil,
+  /// geçiş bitince dispose oluyor - o dispose() çağırdığı
+  /// `ShowcaseView.unregister()`, YENİ HomePage'in AYNI scope string'i
+  /// ('home_onboarding') altındaki TAZE kaydını (kendi kaydı sanıp) siliyor.
+  /// Bu noktadan sonra `startShowCase` paket içinde senkron olarak
+  /// `ShowcaseService.getScope()` çağırıp bu istisnayı fırlatıyor (bkz.
+  /// showcase_view.dart → startShowCase → _findEnclosingShowcaseView →
+  /// ShowcaseService.getControllers → getScope). Önceki turda eklenen
+  /// KOŞULSUZ ekstra postFrameCallback (bkz. yukarıdaki not) bu yarış
+  /// penceresini büyütüp crash'i tetiklenebilir hale getirmişti. Bu, bizim
+  /// kodumuzdan değil paketin global/scope-string-bazlı kayıt tasarımından
+  /// kaynaklanan bir sınırlama olduğu için, try/catch ile YUTUP turu bu
+  /// sefer atlıyoruz (`_hasCheckedHomeOnboarding` zaten tüketildi ama
+  /// homeIntro/homeMeds flag'leri hiç işaretlenmediği için bir sonraki Home
+  /// ziyaretinde, TEMİZ bir HomePage/kayıt ile tur tekrar denenecek -
+  /// kullanıcı turu asla tamamen kaçırmıyor).
   void _runOnboardingSequence(
     List<GlobalKey> steps, {
     bool manual = false,
@@ -2689,10 +2724,27 @@ class _HomePageState extends State<HomePage> {
       _setOnboardingTourActive(true, manual: manual);
       if (needsShowAllOverride) _onboardingForceShowAllPeriods = true;
     });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+
+    void start() {
       if (!mounted) return;
-      _homeTourView.startShowCase(steps);
-    });
+      try {
+        _homeTourView.startShowCase(steps);
+      } catch (e) {
+        debugPrint("Onboarding turu başlatılamadı (scope kaydı kayboldu): $e");
+        if (mounted) {
+          setState(() {
+            _setOnboardingTourActive(false);
+            _onboardingForceShowAllPeriods = false;
+          });
+        }
+      }
+    }
+
+    if (manual || needsShowAllOverride) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => start());
+    } else {
+      start();
+    }
   }
 
   @override
