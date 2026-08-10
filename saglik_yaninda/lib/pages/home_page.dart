@@ -49,39 +49,54 @@ class _HomePageState extends State<HomePage> {
   static const List<String> _dayPeriods = ["Sabah", "Öğle", "Akşam", "Gece"];
   late String _selectedPeriod;
 
-  // --- Zamana göre / Tümünü Göster toggle'ı -------------------------------
-  // İlaç Listesi kartının varsayılan davranışı hâlâ yukarıdaki zaman dilimi
-  // filtresi (_selectedPeriod) - bu, kullanıcının SharedPreferences'ta
-  // KALICI olarak sakladığı bir tercihle (_showAllPeriods) devre dışı
-  // bırakılabiliyor: "Tümünü Göster" modunda kart, seçili dilimden bağımsız
-  // günün TÜM ilaçlarını listeler. Kalıcı seçildi çünkü kullanıcı profili
-  // (yaşlı, tek bir ilaç zaman diliminde kullanıyor olabilir) her açılışta
-  // yeniden ayarlamak istemeyecektir - bkz. _loadShowAllPeriodsPreference.
+  // --- Otomatik / Manuel zaman dilimi toggle'ı ----------------------------
+  // Varsayılan (buton kapalı, "Otomatik"): mevcut davranışla AYNI - kart
+  // günün gerçek saatine göre otomatik dilim gösterir (_periodForHour),
+  // çipler yine dokunulabilir ("göz atma" - _selectedPeriod'u geçici olarak
+  // değiştirir ama bu tercih HİÇBİR YERE kaydedilmez, bir sonraki açılışta
+  // yeniden gerçek saate göre hesaplanır).
   //
-  // `_onboardingForceShowAllPeriods` ayrı ve bilinçli olarak GEÇİCİ bir
-  // bayrak: onboarding turunun dalga 2'si (kart+İçtim) tetiklenirken hedef
-  // mevcut zaman diliminde yoksa (bkz. _maybeStartHomeOnboarding'teki bug
-  // fix notu) tur süresince devreye giriyor, kullanıcının kalıcı
-  // `_showAllPeriods` tercihine hiç dokunmadan - tur bitince (onFinish/
-  // onDismiss) otomatik false'a dönüyor. İkisinden herhangi biri true ise
-  // liste zaman dilimi filtresi olmadan gösteriliyor (bkz.
-  // _effectiveShowAllPeriods).
-  static const String _showAllPeriodsPrefKey = 'home_show_all_periods';
-  bool _showAllPeriods = false;
-  bool _onboardingForceShowAllPeriods = false;
-  bool get _effectiveShowAllPeriods =>
-      _showAllPeriods || _onboardingForceShowAllPeriods;
+  // "Manuel" (buton açık): _selectedPeriod artık saate göre KAYMIYOR -
+  // butonu AÇARKEN her zaman "Sabah"a sıfırlanıyor (bkz. _toggleManualPeriodMode),
+  // sonrasında kullanıcının seçtiği çip SharedPreferences'a "yapışkan"
+  // olarak kaydediliyor (uygulama kapanıp açılsa/saat ilerlese de değişmez
+  // - bkz. _persistManualSelectedPeriod), buton tekrar kapatılana kadar.
+  // Kapatılınca (Otomatik'e dönünce) seçili dilim sıfırdan gerçek saate göre
+  // hesaplanıyor - manuel seçim "unutuluyor" (bir sonraki açılışta tekrar
+  // Manuel'e geçilirse yine "Sabah"tan başlar, son seçilen dilim GERİ
+  // GETİRİLMİYOR - bkz. ürün kararı).
+  //
+  // Toggle'ın kendisinin açık/kapalı durumu da SharedPreferences'ta kalıcı.
+  static const String _manualPeriodModePrefKey = 'home_manual_period_mode';
+  static const String _manualSelectedPeriodPrefKey =
+      'home_manual_selected_period';
+  bool _manualPeriodMode = false;
+
+  // `_onboardingForceManualMode` ayrı ve bilinçli olarak GEÇİCİ bir bayrak:
+  // onboarding turunun dalga 2'si (kart+toggle+İçtim) tetiklenirken hedef
+  // ilacın dilimi mevcut seçili dilimden farklıysa (bkz.
+  // _maybeStartHomeOnboarding'teki bug fix notu) tur süresince devreye
+  // giriyor - "manuel moda geçici geç, hedefin dilimini seç" - kullanıcının
+  // kalıcı `_manualPeriodMode`/seçili dilim tercihine hiç dokunmadan. Tur
+  // bitince (onFinish/onDismiss) hem bayrak hem _selectedPeriod, override
+  // ÖNCESİNDEKİ gerçek değerine (_selectedPeriodBeforeOnboardingOverride)
+  // geri dönüyor.
+  bool _onboardingForceManualMode = false;
+  String? _selectedPeriodBeforeOnboardingOverride;
+  bool get _effectiveManualMode =>
+      _manualPeriodMode || _onboardingForceManualMode;
+
   // "Yardım Al" (manuel tur) build() dışından tetiklendiği için, dalga
-  // 2'nin hedefinin mevcut dilimde olup olmadığını kontrol edebilmek adına
-  // en son hesaplanan bugünkü ilaç listesinin bir kopyası burada tutuluyor
-  // - bkz. _startHomeTourManually.
+  // 2'nin hedef ilacının hangi dilimde olduğunu hesaplayabilmek adına en
+  // son hesaplanan bugünkü ilaç listesinin bir kopyası burada tutuluyor -
+  // bkz. _startHomeTourManually.
   List<QueryDocumentSnapshot> _todaysMedicinesCache = [];
 
   // --- Onboarding turu (Home) ---------------------------------------------
-  // 7 adımlı, iki dalgalı ilk-kurulum turu (bkz. PRODUCT_NOTES.md → "3.
+  // 8 adımlı, iki dalgalı ilk-kurulum turu (bkz. PRODUCT_NOTES.md → "3.
   // Onboarding" ve OnboardingFlags dokümantasyonu):
   //   Dalga 1: SOS, Yardım Al, İlaç listesi, zaman dilimi filtreleri, navbar.
-  //   Dalga 2: Tekil ilaç kartı, İçtim butonu.
+  //   Dalga 2: Tekil ilaç kartı, Otomatik/Manuel dilim toggle'ı, İçtim butonu.
   // `homeTourScope` (bkz. home_tour_shared.dart) paylaşılan bir sabit — navbar
   // adımı (5) main.dart → MainLayout'un widget ağacında yaşadığı için o
   // dosyanın da AYNI scope string'ini kullanması gerekiyor; widget'ların
@@ -93,6 +108,7 @@ class _HomePageState extends State<HomePage> {
   final GlobalKey _medsListShowcaseKey = GlobalKey();
   final GlobalKey _timeFiltersShowcaseKey = GlobalKey();
   final GlobalKey _medCardShowcaseKey = GlobalKey();
+  final GlobalKey _periodToggleShowcaseKey = GlobalKey();
   final GlobalKey _icTimShowcaseKey = GlobalKey();
   late final ShowcaseView _homeTourView;
   bool _hasCheckedHomeOnboarding = false;
@@ -119,6 +135,23 @@ class _HomePageState extends State<HomePage> {
     homeTourIsManualNotifier.value = manual;
   }
 
+  /// Tur biterken (onFinish/onDismiss) çağrılır - `_setOnboardingTourActive(false)`
+  /// ile birlikte, turun geçici "manuel moda zorla + hedefin dilimini seç"
+  /// durumunu (bkz. _onboardingForceManualMode alanındaki not) temizler.
+  /// Bir override hiç uygulanmadıysa (_onboardingForceManualMode zaten
+  /// false) `_selectedPeriodBeforeOnboardingOverride` de null'dır, hiçbir
+  /// şey değişmez.
+  void _restoreFromOnboardingPeriodOverride() {
+    _setOnboardingTourActive(false);
+    if (!_onboardingForceManualMode) return;
+    _onboardingForceManualMode = false;
+    final String? previous = _selectedPeriodBeforeOnboardingOverride;
+    if (previous != null) {
+      _selectedPeriod = previous;
+      _selectedPeriodBeforeOnboardingOverride = null;
+    }
+  }
+
   /// Gece dilimi gece yarısını sarıyor (21:00-04:59), bu yüzden basit bir
   /// aralık karşılaştırması yerine en/en az kontrolü gerekiyor.
   String _periodForHour(int hour) {
@@ -128,38 +161,68 @@ class _HomePageState extends State<HomePage> {
     return "Gece";
   }
 
-  bool _hasMedicineInCurrentPeriod(List<QueryDocumentSnapshot> medicines) {
-    return medicines.any(
-      (doc) =>
-          _periodForHour((doc.data() as Map<String, dynamic>)['hour'] ?? 0) ==
-          _selectedPeriod,
-    );
+  /// Verilen ilaç listesinde SIRALAMAYA göre EN ÖNCE gelenin (dalga 2'nin
+  /// onboarding hedefi - bkz. _wave2Keys) hangi zaman dilimine ait olduğunu
+  /// döner, liste boşsa null.
+  String? _targetMedicinePeriod(List<QueryDocumentSnapshot> medicines) {
+    if (medicines.isEmpty) return null;
+    final data = medicines.first.data() as Map<String, dynamic>;
+    return _periodForHour(data['hour'] ?? 0);
   }
 
-  Future<void> _loadShowAllPeriodsPreference() async {
+  /// Uygulama açılışında toggle'ın kalıcı durumunu (ve Manuel modaysa kaydedilmiş
+  /// seçili dilimi) SharedPreferences'tan yükler. Manuel DEĞİLSE kaydedilmiş
+  /// dilime hiç bakılmıyor - _selectedPeriod zaten initState'te gerçek saate
+  /// göre hesaplanmış durumda kalır.
+  Future<void> _loadManualPeriodModePreference() async {
     final prefs = await SharedPreferences.getInstance();
-    final bool? saved = prefs.getBool(_showAllPeriodsPrefKey);
-    if (saved != null && mounted) {
-      setState(() => _showAllPeriods = saved);
+    final bool manual = prefs.getBool(_manualPeriodModePrefKey) ?? false;
+    if (!mounted) return;
+    if (!manual) return;
+    final String savedPeriod =
+        prefs.getString(_manualSelectedPeriodPrefKey) ?? "Sabah";
+    setState(() {
+      _manualPeriodMode = true;
+      _selectedPeriod = savedPeriod;
+    });
+  }
+
+  /// Saat ikonuna dokununca çağrılır - kullanıcının KALICI tercihini
+  /// değiştirir (bkz. _manualPeriodMode alanındaki not). Onboarding
+  /// turunun geçici zorlaması (_onboardingForceManualMode) bundan ayrı
+  /// tutuluyor, buradan hiç etkilenmiyor.
+  ///
+  /// Manuel moda GEÇERKEN _selectedPeriod her zaman "Sabah"a sıfırlanır
+  /// (bilinçli ürün kararı - son seçilen dilim geri getirilmiyor).
+  /// Otomatik moda DÖNERKEN _selectedPeriod gerçek saate göre yeniden
+  /// hesaplanır.
+  Future<void> _toggleManualPeriodMode() async {
+    final bool newValue = !_manualPeriodMode;
+    setState(() {
+      _manualPeriodMode = newValue;
+      _selectedPeriod = newValue
+          ? "Sabah"
+          : _periodForHour(DateTime.now().hour);
+    });
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_manualPeriodModePrefKey, newValue);
+    if (newValue) {
+      await prefs.setString(_manualSelectedPeriodPrefKey, "Sabah");
     }
   }
 
-  /// "Tümünü Göster" ikonuna dokununca çağrılır - kullanıcının KALICI
-  /// tercihini değiştirir (bkz. _showAllPeriods alanındaki not). Onboarding
-  /// turunun geçici zorlaması (_onboardingForceShowAllPeriods) bundan ayrı
-  /// tutuluyor, buradan hiç etkilenmiyor.
-  Future<void> _toggleShowAllPeriods() async {
-    final bool newValue = !_showAllPeriods;
-    setState(() => _showAllPeriods = newValue);
+  /// Manuel moddayken bir çipe dokununca seçimi "yapışkan" yapmak için
+  /// SharedPreferences'a yazar - bkz. _buildPeriodChips çağrı sitesi.
+  Future<void> _persistManualSelectedPeriod(String period) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_showAllPeriodsPrefKey, newValue);
+    await prefs.setString(_manualSelectedPeriodPrefKey, period);
   }
 
   @override
   void initState() {
     super.initState();
     _selectedPeriod = _periodForHour(DateTime.now().hour);
-    _loadShowAllPeriodsPreference();
+    _loadManualPeriodModePreference();
     _homeTourView = ShowcaseView.register(
       scope: homeTourScope,
       // Tur atlanamaz olmalı (PRODUCT_NOTES: "zorunlu, atlanamaz") — karanlık
@@ -190,25 +253,15 @@ class _HomePageState extends State<HomePage> {
         }
       },
       // Her ikisi de (Anladım ile doğal bitiş / X ile erken kapatma) turun
-      // GEÇİCİ "Tümünü Göster" zorlamasını (bkz. _onboardingForceShowAllPeriods)
-      // temizliyor - kullanıcı kalıcı tercihine (otomatik ya da tümünü
-      // göster, hangisiyse) döner. Kalıcı _showAllPeriods buradan hiç
-      // etkilenmiyor.
+      // GEÇİCİ "Manuel mod + zorlanmış dilim" durumunu (bkz.
+      // _onboardingForceManualMode) temizleyip _selectedPeriod'u override
+      // ÖNCESİNDEKİ gerçek değerine geri döndürüyor - kullanıcının kalıcı
+      // tercihi (otomatik ya da manuel, hangisiyse) buradan hiç etkilenmiyor.
       onFinish: () {
-        if (mounted) {
-          setState(() {
-            _setOnboardingTourActive(false);
-            _onboardingForceShowAllPeriods = false;
-          });
-        }
+        if (mounted) setState(_restoreFromOnboardingPeriodOverride);
       },
       onDismiss: (_) {
-        if (mounted) {
-          setState(() {
-            _setOnboardingTourActive(false);
-            _onboardingForceShowAllPeriods = false;
-          });
-        }
+        if (mounted) setState(_restoreFromOnboardingPeriodOverride);
       },
     );
     if (user != null) {
@@ -1570,7 +1623,10 @@ class _HomePageState extends State<HomePage> {
 
   /// "İlaç Listesi" başlığının altındaki Sabah/Öğle/Akşam/Gece filtre
   /// çipleri - sekme değil, aynı ekranda listeyi filtreleyen basit bir
-  /// seçim satırı. 4 çip Expanded ile eşit genişlikte paylaşılıyor.
+  /// seçim satırı. 4 çip Expanded ile eşit genişlikte paylaşılıyor. HER
+  /// zaman dokunulabilir (Otomatik modda "göz atma" - kaydedilmez; Manuel
+  /// modda seçim SharedPreferences'a "yapışkan" olarak kaydedilir, bkz.
+  /// _manualPeriodMode alanındaki not).
   Widget _buildPeriodChips() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 22),
@@ -1584,7 +1640,10 @@ class _HomePageState extends State<HomePage> {
                 right: index == _dayPeriods.length - 1 ? 0 : 8,
               ),
               child: GestureDetector(
-                onTap: () => setState(() => _selectedPeriod = period),
+                onTap: () {
+                  setState(() => _selectedPeriod = period);
+                  if (_manualPeriodMode) _persistManualSelectedPeriod(period);
+                },
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
                   padding: const EdgeInsets.symmetric(vertical: 9),
@@ -1619,19 +1678,20 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  /// İlaç Listesi kartının sağ üst köşesindeki saat ikonu - varsayılan
-  /// "Otomatik" (zaman dilimine göre filtrelenmiş, mevcut davranış) mod ile
-  /// "Tümünü Göster" modu arasında geçiş yapar (bkz. _showAllPeriods).
+  /// İlaç Listesi kartının sağ üst köşesindeki saat ikonu - "Otomatik"
+  /// (kart günün gerçek saatine göre otomatik dilim gösterir, mevcut/
+  /// varsayılan davranış) ile "Manuel" (kullanıcı bir dilimi sabitler, saat
+  /// ilerlese de değişmez - bkz. _manualPeriodMode) arasında geçiş yapar.
   /// İki durum bilinçli olarak İKİ ayrı sinyalle ayırt ediliyor - sadece
   /// renk değil, ikonun kendisi de dolu/boş değişiyor (Icons.schedule
   /// outline ↔ Icons.access_time_filled dolu) - renk körlüğü gibi
   /// durumlarda da state farkı okunabilsin diye.
   Widget _buildPeriodToggleButton() {
-    final bool showAll = _effectiveShowAllPeriods;
+    final bool manual = _effectiveManualMode;
     return Tooltip(
-      message: showAll
-          ? "Tümü gösteriliyor. Zaman dilimine göre görünüme dönmek için dokun."
-          : "Sadece $_selectedPeriod dilimi gösteriliyor. Tüm ilaçları görmek için dokun.",
+      message: manual
+          ? "Manuel: '$_selectedPeriod' dilimi sabit gösteriliyor. Otomatik (şu anki saate göre) moda dönmek için dokun."
+          : "Otomatik: şu anki saate göre '$_selectedPeriod' gösteriliyor. Bir dilimi sabitlemek için dokun.",
       child: Material(
         color: Colors.transparent,
         shape: const CircleBorder(),
@@ -1640,27 +1700,27 @@ class _HomePageState extends State<HomePage> {
           onTap: () {
             // Tur açıkken (spotlight overlay'i translucent olduğu için
             // gerçek dokunuş buraya da ulaşabiliyor) kullanıcının kalıcı
-            // tercihi turun geçici zorlamasıyla (_onboardingForceShowAllPeriods)
+            // tercihi turun geçici zorlamasıyla (_onboardingForceManualMode)
             // karışmasın diye dokunuş yutuluyor - bkz. diğer butonlardaki
             // aynı desen.
             if (_onboardingTourActive) return;
-            _toggleShowAllPeriods();
+            _toggleManualPeriodMode();
           },
           child: Container(
             width: 34,
             height: 34,
             decoration: BoxDecoration(
-              color: showAll ? AppColors.primary : Colors.transparent,
+              color: manual ? AppColors.primary : Colors.transparent,
               shape: BoxShape.circle,
               border: Border.all(
-                color: AppColors.primary.withOpacity(showAll ? 1 : 0.4),
+                color: AppColors.primary.withOpacity(manual ? 1 : 0.4),
                 width: 1.2,
               ),
             ),
             child: Icon(
-              showAll ? Icons.access_time_filled : Icons.schedule,
+              manual ? Icons.access_time_filled : Icons.schedule,
               size: 18,
-              color: showAll ? Colors.white : AppColors.primary,
+              color: manual ? Colors.white : AppColors.primary,
             ),
           ),
         ),
@@ -1818,18 +1878,17 @@ class _HomePageState extends State<HomePage> {
                   // Seçili zaman dilimine göre SADECE listenin görünümü
                   // filtreleniyor - totalCount/nextMedDoc bilinçli olarak
                   // yukarıdaki (filtresiz) todaysMedicines'a bakmaya devam
-                  // ediyor (bkz. _selectedPeriod alanındaki not).
-                  // "Tümünü Göster" aktifken (kalıcı tercih ya da
-                  // onboarding'in geçici zorlaması, bkz.
-                  // _effectiveShowAllPeriods) bu filtre tamamen atlanıyor.
+                  // ediyor (bkz. _selectedPeriod alanındaki not). _selectedPeriod'un
+                  // kendisi Otomatik modda gerçek saate, Manuel modda
+                  // kullanıcının sabitlediği dilime göre belirleniyor (bkz.
+                  // _manualPeriodMode alanındaki not) - filtrenin kendisi
+                  // her iki modda da AYNI şekilde çalışıyor.
                   final List<QueryDocumentSnapshot> filteredMedicines =
-                      _effectiveShowAllPeriods
-                      ? todaysMedicines
-                      : todaysMedicines.where((doc) {
-                          final data = doc.data() as Map<String, dynamic>;
-                          return _periodForHour(data['hour'] ?? 0) ==
-                              _selectedPeriod;
-                        }).toList();
+                      todaysMedicines.where((doc) {
+                        final data = doc.data() as Map<String, dynamic>;
+                        return _periodForHour(data['hour'] ?? 0) ==
+                            _selectedPeriod;
+                      }).toList();
 
                   return Column(
                     children: [
@@ -1911,7 +1970,33 @@ class _HomePageState extends State<HomePage> {
                                             ),
                                           ),
                                           const SizedBox(width: 8),
-                                          _buildPeriodToggleButton(),
+                                          Showcase.withWidget(
+                                            key: _periodToggleShowcaseKey,
+                                            scope: homeTourScope,
+                                            targetPadding: const EdgeInsets.all(
+                                              4,
+                                            ),
+                                            container: OnboardingTooltipCard(
+                                              title: "Otomatik / Manuel Dilim",
+                                              description:
+                                                  "Bu ikona dokunursan listeyi "
+                                                  "istediğin dilimde sabitleyebilirsin "
+                                                  "- saat ilerlese de değişmez. "
+                                                  "Tekrar dokunursan otomatik "
+                                                  "(şu anki saate göre) moda "
+                                                  "dönersin.",
+                                              buttonLabel: "Anladım",
+                                              onNext: () =>
+                                                  _homeTourView.next(
+                                                    force: true,
+                                                  ),
+                                              showCloseButton:
+                                                  _onboardingTourIsManual,
+                                              onClose: () =>
+                                                  _homeTourView.dismiss(),
+                                            ),
+                                            child: _buildPeriodToggleButton(),
+                                          ),
                                         ],
                                       ),
                                     ],
@@ -1934,23 +2019,11 @@ class _HomePageState extends State<HomePage> {
                                     showCloseButton: _onboardingTourIsManual,
                                     onClose: () => _homeTourView.dismiss(),
                                   ),
-                                  // "Tümünü Göster" aktifken (kalıcı tercih ya
-                                  // da onboarding'in geçici zorlaması) bu
-                                  // çipler listenin görünümünü etkilemiyor -
-                                  // IgnorePointer ile dokunuşları da
-                                  // TAMAMEN kapatıyoruz (soluk görünüp hâlâ
-                                  // tıklanabilir olmak "devre dışı" izlenimi
-                                  // verip kullanıcıyı yanıltıyordu). Otomatik
-                                  // moda dönünce tekrar aktif oluyorlar.
-                                  child: IgnorePointer(
-                                    ignoring: _effectiveShowAllPeriods,
-                                    child: Opacity(
-                                      opacity: _effectiveShowAllPeriods
-                                          ? 0.4
-                                          : 1,
-                                      child: _buildPeriodChips(),
-                                    ),
-                                  ),
+                                  // Çipler Otomatik VE Manuel modda AYNI
+                                  // şekilde tam aktif - hiçbir zaman
+                                  // devre dışı bırakılmıyor (bkz.
+                                  // _buildPeriodChips dokümantasyonu).
+                                  child: _buildPeriodChips(),
                                 ),
                                 const SizedBox(height: 8),
 
@@ -2550,11 +2623,17 @@ class _HomePageState extends State<HomePage> {
     homeNavbarShowcaseKey,
   ];
 
-  /// Dalga 2'nin 2 adımı, sırayla — tekil ilaç kartı ÖNCE, İçtim butonu
-  /// SONRA (kartın genel yapısını anlat, sonra butona odaklan). İkisinin de
-  /// hedefi bugünün ilk alınmamış ilacı - yoksa skipIfTargetNotPresent ile
-  /// ikisi de atlanır.
-  List<GlobalKey> get _wave2Keys => [_medCardShowcaseKey, _icTimShowcaseKey];
+  /// Dalga 2'nin 3 adımı, sırayla — tekil ilaç kartı → Otomatik/Manuel
+  /// dilim toggle'ı → İçtim butonu (kartın genel yapısını anlat, sonra
+  /// filtreleme özelliğini tanıt, sonra asıl aksiyona odaklan). Toggle her
+  /// zaman render edildiği için (ilaç sayısından bağımsız) hiç
+  /// atlanmıyor - kart/İçtim'in hedefi ise bugünün ilk alınmamış ilacı,
+  /// yoksa skipIfTargetNotPresent ile ikisi de atlanır.
+  List<GlobalKey> get _wave2Keys => [
+    _medCardShowcaseKey,
+    _periodToggleShowcaseKey,
+    _icTimShowcaseKey,
+  ];
 
   /// Home sekmesine her girişte, medicines stream'i ilk kez veri getirdiğinde
   /// bir kez çağrılır — bilinçli olarak user doc stream'inden DEĞİL, medicines
@@ -2618,20 +2697,19 @@ class _HomePageState extends State<HomePage> {
     ];
     if (pendingSteps.isEmpty) return;
 
-    // Bug fix (gerçek cihazda bulundu): dalga 2 (kart+İçtim) beklerken,
-    // bugünün ilaçları arasında MEVCUT zaman dilimi filtresine (bkz.
+    // Bug fix (gerçek cihazda bulundu): dalga 2 (kart+toggle+İçtim)
+    // beklerken, bugünün ilaçları arasında MEVCUT seçili dilime (bkz.
     // _selectedPeriod) uyan hiçbir şey yoksa (ör. akşam saatlerinde sabah
     // dilimine bir ilaç eklenmişse) filteredMedicines boş kalır, index 0
     // hiç render edilmez, skipIfTargetNotPresent kart/İçtim adımlarının
     // ikisini de sessizce atlar. Bu durumda turu başlatmadan önce GEÇİCİ
-    // olarak "Tümünü Göster"e geçiyoruz (bkz. _onboardingForceShowAllPeriods)
-    // - en az 1 ilaç olduğunu (pendingSteps'in dolu olmasından) zaten
-    // biliyoruz, o yüzden bu her zaman index 0'a gerçek bir hedef koyar.
-    final bool needsShowAllOverride =
-        !medsDone &&
-        !_effectiveShowAllPeriods &&
-        todaysMedicines.isNotEmpty &&
-        !_hasMedicineInCurrentPeriod(todaysMedicines);
+    // olarak Manuel moda geçip hedef ilacın dilimini seçiyoruz (bkz.
+    // _onboardingForceManualMode) - en az 1 ilaç olduğunu (pendingSteps'in
+    // dolu olmasından) zaten biliyoruz, o yüzden bu her zaman index 0'a
+    // gerçek bir hedef koyar.
+    final String? targetPeriod = _targetMedicinePeriod(todaysMedicines);
+    final bool needsForcedPeriod =
+        !medsDone && targetPeriod != null && targetPeriod != _selectedPeriod;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -2642,7 +2720,7 @@ class _HomePageState extends State<HomePage> {
       if (route != null && !route.isCurrent) return;
       _runOnboardingSequence(
         pendingSteps,
-        needsShowAllOverride: needsShowAllOverride,
+        forcedPeriod: needsForcedPeriod ? targetPeriod : null,
       );
     });
   }
@@ -2651,43 +2729,43 @@ class _HomePageState extends State<HomePage> {
   /// baştan (7 adımın hepsini sırayla) yeniden başlatır. Manuel modda
   /// tooltip kartında bir kapatma (X) ikonu belirir (bkz.
   /// _onboardingTourIsManual → OnboardingTooltipCard). Dalga 2'nin hedefi
-  /// (ilaç kartı/İçtim) mevcut zaman diliminde yoksa, _maybeStartHomeOnboarding
+  /// (ilaç kartı/İçtim) mevcut seçili dilimde yoksa, _maybeStartHomeOnboarding
   /// ile aynı bug fix uygulanır (bkz. o metodun dokümantasyonu) - "tekrar
   /// öğren" niyeti tamdır, dalga tamamlanma durumuna bakılmaz.
   void _startHomeTourManually() {
-    final bool needsShowAllOverride =
-        !_effectiveShowAllPeriods &&
-        _todaysMedicinesCache.isNotEmpty &&
-        !_hasMedicineInCurrentPeriod(_todaysMedicinesCache);
+    final String? targetPeriod = _targetMedicinePeriod(_todaysMedicinesCache);
+    final bool needsForcedPeriod =
+        targetPeriod != null && targetPeriod != _selectedPeriod;
     _runOnboardingSequence(
       [..._wave1Keys, ..._wave2Keys],
       manual: true,
-      needsShowAllOverride: needsShowAllOverride,
+      forcedPeriod: needsForcedPeriod ? targetPeriod : null,
     );
   }
 
   /// `_maybeStartHomeOnboarding` ve `_startHomeTourManually`'nin paylaştığı
-  /// ortak başlatma yolu. `needsShowAllOverride` true ise, turu başlatmadan
-  /// önce GEÇİCİ olarak "Tümünü Göster" moduna geçilir (bkz.
-  /// _onboardingForceShowAllPeriods) - kullanıcının kalıcı `_showAllPeriods`
-  /// tercihine DOKUNULMAZ, tur bitince (onFinish/onDismiss) otomatik geri
-  /// alınır.
+  /// ortak başlatma yolu. `forcedPeriod` verilmişse, turu başlatmadan önce
+  /// GEÇİCİ olarak Manuel moda geçilip `_selectedPeriod` bu değere sabitlenir
+  /// (bkz. _onboardingForceManualMode) - kullanıcının kalıcı
+  /// `_manualPeriodMode`/seçili dilim tercihine DOKUNULMAZ (önceki gerçek
+  /// değer `_selectedPeriodBeforeOnboardingOverride`'da saklanır), tur
+  /// bitince (onFinish/onDismiss → _restoreFromOnboardingPeriodOverride)
+  /// otomatik geri alınır.
   ///
   /// **Bir frame bekleme SADECE gerektiğinde ekleniyor** (bkz. `start()`'ın
   /// çağrılış yeri) - iki AYRI sebepten biri varsa: (a) `manual` - tooltip
   /// kartının (OnboardingTooltipCard) güncel `_onboardingTourIsManual`
   /// değeriyle inşa edilmiş olması gerekiyor (kapatma/X ikonu doğru
-  /// görünsün diye), (b) `needsShowAllOverride` - kart/İçtim hedefinin
-  /// ağaca YENİ eklenmiş olması ve showcaseview'ın onun controller'ını
-  /// kaydetmiş olması gerekiyor (bir Showcase'in controller'ı kendi
-  /// `initState`'inde SENKRON kaydediliyor, bkz. paket kaynağı,
-  /// showcase.dart → _ShowcaseState.initState - yani setState'in
-  /// tetiklediği rebuild TAMAMLANDIKTAN sonra, bir sonraki frame'in
-  /// postFrameCallback'inde çağrıldığında controller her zaman hazır olur).
-  /// İkisi de gerekmiyorsa (yaygın durum: otomatik tetiklenen, hedefi zaten
-  /// mevcut zaman diliminde olan dalga) HİÇ beklemeden hemen başlatılıyor -
-  /// bkz. aşağıdaki "Bug fix" notu, gereksiz her ekstra frame bir yarış
-  /// koşulunu genişletiyordu.
+  /// görünsün diye), (b) `forcedPeriod` - kart/İçtim hedefinin ağaca YENİ
+  /// eklenmiş olması ve showcaseview'ın onun controller'ını kaydetmiş
+  /// olması gerekiyor (bir Showcase'in controller'ı kendi `initState`'inde
+  /// SENKRON kaydediliyor, bkz. paket kaynağı, showcase.dart →
+  /// _ShowcaseState.initState - yani setState'in tetiklediği rebuild
+  /// TAMAMLANDIKTAN sonra, bir sonraki frame'in postFrameCallback'inde
+  /// çağrıldığında controller her zaman hazır olur). İkisi de gerekmiyorsa
+  /// (yaygın durum: otomatik tetiklenen, hedefi zaten mevcut dilimde olan
+  /// dalga) HİÇ beklemeden hemen başlatılıyor - bkz. aşağıdaki "Bug fix"
+  /// notu, gereksiz her ekstra frame bir yarış koşulunu genişletiyordu.
   ///
   /// **Bug fix (gerçek cihazda bulundu, crash):** "No ShowcaseView
   /// registered for scope 'home_onboarding'..." - Add sayfasından "Kaydet
@@ -2718,11 +2796,15 @@ class _HomePageState extends State<HomePage> {
   void _runOnboardingSequence(
     List<GlobalKey> steps, {
     bool manual = false,
-    bool needsShowAllOverride = false,
+    String? forcedPeriod,
   }) {
     setState(() {
       _setOnboardingTourActive(true, manual: manual);
-      if (needsShowAllOverride) _onboardingForceShowAllPeriods = true;
+      if (forcedPeriod != null) {
+        _selectedPeriodBeforeOnboardingOverride = _selectedPeriod;
+        _onboardingForceManualMode = true;
+        _selectedPeriod = forcedPeriod;
+      }
     });
 
     void start() {
@@ -2731,16 +2813,11 @@ class _HomePageState extends State<HomePage> {
         _homeTourView.startShowCase(steps);
       } catch (e) {
         debugPrint("Onboarding turu başlatılamadı (scope kaydı kayboldu): $e");
-        if (mounted) {
-          setState(() {
-            _setOnboardingTourActive(false);
-            _onboardingForceShowAllPeriods = false;
-          });
-        }
+        if (mounted) setState(_restoreFromOnboardingPeriodOverride);
       }
     }
 
-    if (manual || needsShowAllOverride) {
+    if (manual || forcedPeriod != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) => start());
     } else {
       start();
