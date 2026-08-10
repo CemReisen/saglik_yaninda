@@ -77,10 +77,9 @@ class _LoginPageState extends State<LoginPage> {
         // doküman henüz oluşmamışken de çağrılabilir (bkz. _signInWithGoogle
         // içindeki NOT_FOUND bug raporu), .update() bu durumda istisna
         // fırlatırdı.
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(userId)
-            .set({'fcmToken': token}, SetOptions(merge: true));
+        await FirebaseFirestore.instance.collection('users').doc(userId).set({
+          'fcmToken': token,
+        }, SetOptions(merge: true));
         print("✅ FCM Token veritabanına kaydedildi.");
       }
     } catch (e) {
@@ -273,7 +272,9 @@ class _LoginPageState extends State<LoginPage> {
         ),
       );
     } on FirebaseAuthException catch (e) {
-      debugPrint("⚠️ Google ile girişte FirebaseAuthException: ${e.code} ${e.message}");
+      debugPrint(
+        "⚠️ Google ile girişte FirebaseAuthException: ${e.code} ${e.message}",
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -451,8 +452,7 @@ class _LoginPageState extends State<LoginPage> {
                 ),
                 const SizedBox(height: 4),
                 GestureDetector(
-                  onTap: () =>
-                      Navigator.pushNamed(context, '/recovery_code'),
+                  onTap: () => Navigator.pushNamed(context, '/recovery_code'),
                   child: Text(
                     "Kodum var",
                     style: GoogleFonts.poppins(

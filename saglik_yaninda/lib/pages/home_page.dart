@@ -12,6 +12,7 @@ import 'package:showcaseview/showcaseview.dart';
 import 'package:saglik_yaninda/core/theme/app_colors.dart';
 import 'package:saglik_yaninda/widgets/edit_medicine_dialog.dart';
 import 'package:saglik_yaninda/widgets/onboarding/onboarding_tooltip_card.dart';
+import 'package:saglik_yaninda/widgets/onboarding/home_tour_shared.dart';
 import 'package:saglik_yaninda/services/onboarding_service.dart';
 
 class HomePage extends StatefulWidget {
@@ -48,26 +49,46 @@ class _HomePageState extends State<HomePage> {
   late String _selectedPeriod;
 
   // --- Onboarding turu (Home) ---------------------------------------------
-  // SOS ve İçtim butonlarını sırayla spotlight'layan ilk-kurulum turu (bkz.
-  // PRODUCT_NOTES.md → "3. Onboarding"). "home_onboarding" scope'u, bu
-  // sayfanın Showcase widget'larını başka sayfaların (Ekle/Profil) kendi
-  // scope'larından izole eder — her scope'a widget'ların `scope:` parametresi
-  // de açıkça eşleşiyor, "en son aktif scope" gibi zımni bir varsayıma
-  // güvenilmiyor (bkz. showcaseview paket kaynağı, Showcase._scopeName).
-  static const String _homeTourScope = 'home_onboarding';
+  // 7 adımlı, iki dalgalı ilk-kurulum turu (bkz. PRODUCT_NOTES.md → "3.
+  // Onboarding" ve OnboardingFlags dokümantasyonu):
+  //   Dalga 1: SOS, Yardım Al, İlaç listesi, zaman dilimi filtreleri, navbar.
+  //   Dalga 2: Tekil ilaç kartı, İçtim butonu.
+  // `homeTourScope` (bkz. home_tour_shared.dart) paylaşılan bir sabit — navbar
+  // adımı (5) main.dart → MainLayout'un widget ağacında yaşadığı için o
+  // dosyanın da AYNI scope string'ini kullanması gerekiyor; widget'ların
+  // `scope:` parametresi her yerde açıkça bu sabite eşleniyor, "en son aktif
+  // scope" gibi zımni bir varsayıma güvenilmiyor (bkz. showcaseview paket
+  // kaynağı, Showcase._scopeName).
   final GlobalKey _sosShowcaseKey = GlobalKey();
+  final GlobalKey _yardimAlShowcaseKey = GlobalKey();
+  final GlobalKey _medsListShowcaseKey = GlobalKey();
+  final GlobalKey _timeFiltersShowcaseKey = GlobalKey();
+  final GlobalKey _medCardShowcaseKey = GlobalKey();
   final GlobalKey _icTimShowcaseKey = GlobalKey();
   late final ShowcaseView _homeTourView;
   bool _hasCheckedHomeOnboarding = false;
-  // Tur açıkken SOS/İçtim'in GERÇEK aksiyonunu (SOS bildirimi/ilaç işaretleme)
-  // tetiklememek için: showcaseview'ın hedef overlay'i varsayılan olarak
-  // translucent — spotlight'lanan gerçek widget'a dokunmak, arkasındaki
-  // gerçek GestureDetector'a da ulaşıyor (paket kaynağında doğrulandı, bkz.
+  // Tur açıkken SOS/İçtim/Yardım Al gibi butonların GERÇEK aksiyonunu (SOS
+  // bildirimi/ilaç işaretleme/turu yeniden başlatma) tetiklememek için:
+  // showcaseview'ın hedef overlay'i varsayılan olarak translucent —
+  // spotlight'lanan gerçek widget'a dokunmak, arkasındaki gerçek
+  // GestureDetector'a da ulaşıyor (paket kaynağında doğrulandı, bkz.
   // target_widget.dart). Bu, ilk kez uygulamayı gören/tur okuyan bir
   // kullanıcının yanlışlıkla gerçek bir SOS göndermesi gibi istenmeyen bir
   // yan etkiye yol açabilirdi.
   bool _onboardingTourActive = false;
   bool _onboardingTourIsManual = false;
+
+  /// `_onboardingTourActive`/`_onboardingTourIsManual` alanlarını, main.dart
+  /// → MainLayout'un (navbar adımı + sekme değişimi engeli için) okuyabildiği
+  /// paylaşılan ValueNotifier'larla senkron tutar — bu iki State sınıfı
+  /// arasında context/widget ağacı üzerinden doğrudan erişim yok, tek bağlantı
+  /// noktası bu paylaşılan notifier'lar (bkz. home_tour_shared.dart).
+  void _setOnboardingTourActive(bool active, {bool manual = false}) {
+    _onboardingTourActive = active;
+    _onboardingTourIsManual = manual;
+    onboardingTourActiveNotifier.value = active;
+    homeTourIsManualNotifier.value = manual;
+  }
 
   /// Gece dilimi gece yarısını sarıyor (21:00-04:59), bu yüzden basit bir
   /// aralık karşılaştırması yerine en/en az kontrolü gerekiyor.
@@ -83,35 +104,39 @@ class _HomePageState extends State<HomePage> {
     super.initState();
     _selectedPeriod = _periodForHour(DateTime.now().hour);
     _homeTourView = ShowcaseView.register(
-      scope: _homeTourScope,
+      scope: homeTourScope,
       // Tur atlanamaz olmalı (PRODUCT_NOTES: "zorunlu, atlanamaz") — karanlık
       // alana dokunmak adımı geçmesin/kapatmasın, tek ilerleme yolu
       // OnboardingTooltipCard'daki "Anladım" butonu.
       disableBarrierInteraction: true,
-      // İçtim adımının hedefi (bugünün ilk alınmamış ilacı) hiç yoksa (ör.
-      // yeni bir elder hesabında henüz ilaç eklenmemişse) o adımı sessizce
-      // atlayıp turu SOS'la bitirir — sahte bir hedef uydurmak yerine.
+      // Dalga 2'nin hedefi (bugünün ilk alınmamış ilacının kartı/İçtim
+      // butonu) hiç yoksa (ör. yeni bir elder hesabında henüz ilaç
+      // eklenmemişse) o adımları sessizce atlar — sahte bir hedef uydurmak
+      // yerine.
       skipIfTargetNotPresent: true,
-      // Bayraklar burada DEĞİL, her adım gerçekten tamamlandığında
-      // (onComplete) tek tek yazılıyor — bkz. OnboardingFlags dokümantasyonu.
-      // onComplete SADECE gerçekten gösterilip "Anladım" ile geçilen adımlar
-      // için tetikleniyor (skipIfTargetNotPresent ile atlanan bir adım için
-      // ateşlenmiyor, paket kaynağında doğrulandı) - bu yüzden İçtim
-      // atlanırsa homeMeds false kalır, bir sonraki ziyarette tekrar denenir.
+      // Bayraklar burada DEĞİL, her DALGANIN SON adımı gerçekten
+      // tamamlandığında (onComplete) yazılıyor — bkz. OnboardingFlags
+      // dokümantasyonu. onComplete SADECE gerçekten gösterilip "Anladım" ile
+      // geçilen adımlar için tetikleniyor (skipIfTargetNotPresent ile
+      // atlanan bir adım için ateşlenmiyor, paket kaynağında doğrulandı) -
+      // bu yüzden dalga 2 atlanırsa homeMeds false kalır, bir sonraki
+      // ziyarette (artık hedefi varsa) tekrar denenir.
       onComplete: (index, key) {
         final uid = user?.uid;
         if (uid == null) return;
-        if (key == _sosShowcaseKey) {
-          OnboardingFlags.markCompleted(uid, OnboardingFlags.homeSos);
+        if (key == homeNavbarShowcaseKey) {
+          // Dalga 1'in son adımı.
+          OnboardingFlags.markCompleted(uid, OnboardingFlags.homeIntro);
         } else if (key == _icTimShowcaseKey) {
+          // Dalga 2'nin son adımı.
           OnboardingFlags.markCompleted(uid, OnboardingFlags.homeMeds);
         }
       },
       onFinish: () {
-        if (mounted) setState(() => _onboardingTourActive = false);
+        if (mounted) setState(() => _setOnboardingTourActive(false));
       },
       onDismiss: (_) {
-        if (mounted) setState(() => _onboardingTourActive = false);
+        if (mounted) setState(() => _setOnboardingTourActive(false));
       },
     );
     if (user != null) {
@@ -1109,7 +1134,7 @@ class _HomePageState extends State<HomePage> {
             flex: 3,
             child: Showcase.withWidget(
               key: _sosShowcaseKey,
-              scope: _homeTourScope,
+              scope: homeTourScope,
               targetPadding: const EdgeInsets.all(4),
               container: OnboardingTooltipCard(
                 title: "Acil Durum (SOS)",
@@ -1168,45 +1193,66 @@ class _HomePageState extends State<HomePage> {
           const SizedBox(width: 10),
           Expanded(
             flex: 2,
-            child: GestureDetector(
-              onTap: _startHomeTourManually,
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                decoration: BoxDecoration(
-                  color: AppColors.helpAccent,
-                  borderRadius: BorderRadius.circular(18),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.helpAccent.withOpacity(0.35),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(
-                      Icons.help_outline_rounded,
-                      color: Colors.white,
-                      size: 22,
-                    ),
-                    const SizedBox(width: 6),
-                    Flexible(
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          "Yardım Al",
-                          maxLines: 1,
-                          style: GoogleFonts.poppins(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
+            child: Showcase.withWidget(
+              key: _yardimAlShowcaseKey,
+              scope: homeTourScope,
+              targetPadding: const EdgeInsets.all(4),
+              container: OnboardingTooltipCard(
+                title: "Yardım Al",
+                description:
+                    "Turu unuttuysan ya da tekrar izlemek istersen, "
+                    "istediğin zaman bu butona dokunabilirsin.",
+                buttonLabel: "Anladım",
+                onNext: () => _homeTourView.next(force: true),
+                showCloseButton: _onboardingTourIsManual,
+                onClose: () => _homeTourView.dismiss(),
+              ),
+              child: GestureDetector(
+                onTap: () {
+                  // Tur açıkken (spotlight overlay'i translucent olduğu için
+                  // gerçek dokunuş buraya da ulaşabiliyor) turun kendisi
+                  // ortasında yeniden başlatılmasın.
+                  if (_onboardingTourActive) return;
+                  _startHomeTourManually();
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    color: AppColors.helpAccent,
+                    borderRadius: BorderRadius.circular(18),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.helpAccent.withOpacity(0.35),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(
+                        Icons.help_outline_rounded,
+                        color: Colors.white,
+                        size: 22,
+                      ),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            "Yardım Al",
+                            maxLines: 1,
+                            style: GoogleFonts.poppins(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -1635,569 +1681,665 @@ class _HomePageState extends State<HomePage> {
                       const SizedBox(height: 4),
 
                       Expanded(
-                        child: Container(
-                          margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                          padding: const EdgeInsets.only(top: 8),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF4F6F9),
-                            borderRadius: BorderRadius.circular(30),
-                            border: Border.all(
-                              color: const Color(0xFFCFD8DC),
-                              width: 1.5,
-                            ),
+                        child: Showcase.withWidget(
+                          key: _medsListShowcaseKey,
+                          scope: homeTourScope,
+                          targetPadding: const EdgeInsets.all(4),
+                          container: OnboardingTooltipCard(
+                            title: "İlaç Listen",
+                            description:
+                                "Bugünkü ilaçların burada listelenir — "
+                                "alınanlar ve alınmayanlar bir arada görünür.",
+                            buttonLabel: "Anladım",
+                            onNext: () => _homeTourView.next(force: true),
+                            showCloseButton: _onboardingTourIsManual,
+                            onClose: () => _homeTourView.dismiss(),
                           ),
-                          child: Column(
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 22,
-                                  vertical: 8,
-                                ),
-                                child: Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text(
-                                      "İlaç Listesi",
-                                      style: GoogleFonts.poppins(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
-                                        color: const Color(0xFF424B7F),
-                                      ),
-                                    ),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 6,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFE0F2F1),
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Text(
-                                        "$totalCount İlaç",
-                                        style: const TextStyle(
-                                          color: Color(0xFF00695C),
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 15,
+                          child: Container(
+                            margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                            padding: const EdgeInsets.only(top: 8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF4F6F9),
+                              borderRadius: BorderRadius.circular(30),
+                              border: Border.all(
+                                color: const Color(0xFFCFD8DC),
+                                width: 1.5,
+                              ),
+                            ),
+                            child: Column(
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 22,
+                                    vertical: 8,
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        "İlaç Listesi",
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                          color: const Color(0xFF424B7F),
                                         ),
                                       ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              _buildPeriodChips(),
-                              const SizedBox(height: 8),
-
-                              Expanded(
-                                child: ClipRRect(
-                                  borderRadius: const BorderRadius.only(
-                                    bottomLeft: Radius.circular(30),
-                                    bottomRight: Radius.circular(30),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 6,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFE0F2F1),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          "$totalCount İlaç",
+                                          style: const TextStyle(
+                                            color: Color(0xFF00695C),
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 15,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                  child: filteredMedicines.isEmpty
-                                      ? Center(
-                                          child: Text(
-                                            todaysMedicines.isEmpty
-                                                ? "Bugünlük ilaç yok!"
-                                                : "$_selectedPeriod diliminde ilacın yok",
-                                            style: const TextStyle(
-                                              fontSize: 16,
+                                ),
+                                const SizedBox(height: 8),
+                                Showcase.withWidget(
+                                  key: _timeFiltersShowcaseKey,
+                                  scope: homeTourScope,
+                                  targetPadding: const EdgeInsets.all(4),
+                                  container: OnboardingTooltipCard(
+                                    title: "Zaman Dilimi Filtreleri",
+                                    description:
+                                        "Sabah/Öğle/Akşam/Gece butonlarıyla "
+                                        "listeyi o dilimdeki ilaçlara "
+                                        "daraltabilirsin.",
+                                    buttonLabel: "Anladım",
+                                    onNext: () =>
+                                        _homeTourView.next(force: true),
+                                    showCloseButton: _onboardingTourIsManual,
+                                    onClose: () => _homeTourView.dismiss(),
+                                  ),
+                                  child: _buildPeriodChips(),
+                                ),
+                                const SizedBox(height: 8),
+
+                                Expanded(
+                                  child: ClipRRect(
+                                    borderRadius: const BorderRadius.only(
+                                      bottomLeft: Radius.circular(30),
+                                      bottomRight: Radius.circular(30),
+                                    ),
+                                    child: filteredMedicines.isEmpty
+                                        ? Center(
+                                            child: Text(
+                                              todaysMedicines.isEmpty
+                                                  ? "Bugünlük ilaç yok!"
+                                                  : "$_selectedPeriod diliminde ilacın yok",
+                                              style: const TextStyle(
+                                                fontSize: 16,
+                                              ),
                                             ),
-                                          ),
-                                        )
-                                      : ListView.builder(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 14,
-                                          ),
-                                          itemCount: filteredMedicines.length,
-                                          itemBuilder: (context, index) {
-                                            var medicine =
-                                                filteredMedicines[index];
-                                            var data =
-                                                medicine.data()
-                                                    as Map<String, dynamic>;
-                                            bool isTakenToday =
-                                                data['lastTakenDate'] == today;
-                                            bool isCritical =
-                                                data['isCritical'] ?? false;
-                                            // "Ertele" (+15dk) sadece 1 saatten az
-                                            // gecikmiş (ya da henüz vakti gelmemiş)
-                                            // ilaçlar için mantıklı - 1+ saat
-                                            // gecikmiş bir ilacı 15dk ertelemek
-                                            // anlamsız, o noktada tek makul aksiyon
-                                            // İçtim.
-                                            final bool showErtele =
-                                                !isTakenToday &&
-                                                _minutesLate(data) < 60;
-                                            String time =
-                                                "${data['hour'].toString().padLeft(2, '0')}:${data['minute'].toString().padLeft(2, '0')}";
-                                            String medName =
-                                                data['name'] ?? 'İlaç';
-                                            String doseInfo =
-                                                "${data['dose'] ?? ''} • ${data['hungerStatus'] ?? ''}";
+                                          )
+                                        : ListView.builder(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 14,
+                                            ),
+                                            itemCount: filteredMedicines.length,
+                                            itemBuilder: (context, index) {
+                                              var medicine =
+                                                  filteredMedicines[index];
+                                              var data =
+                                                  medicine.data()
+                                                      as Map<String, dynamic>;
+                                              bool isTakenToday =
+                                                  data['lastTakenDate'] ==
+                                                  today;
+                                              bool isCritical =
+                                                  data['isCritical'] ?? false;
+                                              // "Ertele" (+15dk) sadece 1 saatten az
+                                              // gecikmiş (ya da henüz vakti gelmemiş)
+                                              // ilaçlar için mantıklı - 1+ saat
+                                              // gecikmiş bir ilacı 15dk ertelemek
+                                              // anlamsız, o noktada tek makul aksiyon
+                                              // İçtim.
+                                              final bool showErtele =
+                                                  !isTakenToday &&
+                                                  _minutesLate(data) < 60;
+                                              String time =
+                                                  "${data['hour'].toString().padLeft(2, '0')}:${data['minute'].toString().padLeft(2, '0')}";
+                                              String medName =
+                                                  data['name'] ?? 'İlaç';
+                                              String doseInfo =
+                                                  "${data['dose'] ?? ''} • ${data['hungerStatus'] ?? ''}";
 
-                                            String doseString =
-                                                (data['dose'] ?? '')
-                                                    .toLowerCase();
-                                            IconData medIcon = Icons.medication;
-                                            if (doseString.contains('ölçek') ||
-                                                doseString.contains('ml') ||
-                                                doseString.contains('şurup')) {
-                                              medIcon = Icons.local_drink;
-                                            } else if (doseString.contains(
-                                                  'ünite',
-                                                ) ||
-                                                doseString.contains('iğne') ||
-                                                doseString.contains('flakon') ||
-                                                doseString.contains(
-                                                  'enjeksiyon',
-                                                )) {
-                                              medIcon = Icons.vaccines;
-                                            } else if (doseString.contains(
-                                              'damla',
-                                            )) {
-                                              medIcon = Icons.water_drop;
-                                            } else if (doseString.contains(
-                                                  'krem',
-                                                ) ||
-                                                doseString.contains('merhem')) {
-                                              medIcon = Icons.health_and_safety;
-                                            }
+                                              String doseString =
+                                                  (data['dose'] ?? '')
+                                                      .toLowerCase();
+                                              IconData medIcon =
+                                                  Icons.medication;
+                                              if (doseString.contains(
+                                                    'ölçek',
+                                                  ) ||
+                                                  doseString.contains('ml') ||
+                                                  doseString.contains(
+                                                    'şurup',
+                                                  )) {
+                                                medIcon = Icons.local_drink;
+                                              } else if (doseString.contains(
+                                                    'ünite',
+                                                  ) ||
+                                                  doseString.contains('iğne') ||
+                                                  doseString.contains(
+                                                    'flakon',
+                                                  ) ||
+                                                  doseString.contains(
+                                                    'enjeksiyon',
+                                                  )) {
+                                                medIcon = Icons.vaccines;
+                                              } else if (doseString.contains(
+                                                'damla',
+                                              )) {
+                                                medIcon = Icons.water_drop;
+                                              } else if (doseString.contains(
+                                                    'krem',
+                                                  ) ||
+                                                  doseString.contains(
+                                                    'merhem',
+                                                  )) {
+                                                medIcon =
+                                                    Icons.health_and_safety;
+                                              }
 
-                                            // Alınma durumu değiştiğinde (İçtim
-                                            // butonu / sıralama) kartın zemin
-                                            // rengi, kenarlığı ve ikon
-                                            // arkaplanı sert bir kesme yerine
-                                            // yumuşak bir fade ile geçsin diye
-                                            // AnimatedContainer kullanılıyor.
-                                            // ValueKey(medicine.id), sıralama
-                                            // değişip kart listede yer
-                                            // değiştirdiğinde Flutter'ın aynı
-                                            // elementi (dolayısıyla animasyon
-                                            // durumunu) eşleştirebilmesi için
-                                            // gerekli - tam pozisyon kayması
-                                            // animasyonu (FLIP tarzı reorder)
-                                            // kapsam dışı, sadece bu tek kartın
-                                            // kendi renk geçişi animasyonlu.
-                                            return AnimatedContainer(
-                                              key: ValueKey(medicine.id),
-                                              duration: const Duration(
-                                                milliseconds: 300,
-                                              ),
-                                              margin: const EdgeInsets.only(
-                                                bottom: 8,
-                                              ),
-                                              decoration: BoxDecoration(
-                                                color: isTakenToday
-                                                    ? Colors.grey.shade100
-                                                    : Colors.white,
-                                                borderRadius:
-                                                    BorderRadius.circular(14),
-                                                boxShadow: isTakenToday
-                                                    ? []
-                                                    : [
-                                                        BoxShadow(
-                                                          color: Colors.black
-                                                              .withOpacity(
-                                                                0.08,
-                                                              ),
-                                                          blurRadius: 6,
-                                                          offset: const Offset(
-                                                            0,
-                                                            2,
+                                              // Alınma durumu değiştiğinde (İçtim
+                                              // butonu / sıralama) kartın zemin
+                                              // rengi, kenarlığı ve ikon
+                                              // arkaplanı sert bir kesme yerine
+                                              // yumuşak bir fade ile geçsin diye
+                                              // AnimatedContainer kullanılıyor.
+                                              // ValueKey(medicine.id), sıralama
+                                              // değişip kart listede yer
+                                              // değiştirdiğinde Flutter'ın aynı
+                                              // elementi (dolayısıyla animasyon
+                                              // durumunu) eşleştirebilmesi için
+                                              // gerekli - tam pozisyon kayması
+                                              // animasyonu (FLIP tarzı reorder)
+                                              // kapsam dışı, sadece bu tek kartın
+                                              // kendi renk geçişi animasyonlu.
+                                              //
+                                              // index==0'daki kart, onboarding
+                                              // turunun 6. adımı (medCard) için
+                                              // bir yerel değişkene atanıyor -
+                                              // altta index==0 ise dış bir
+                                              // Showcase.withWidget ile
+                                              // sarılıyor (içindeki İçtim
+                                              // butonu zaten kendi Showcase'ini
+                                              // taşıyor - iki Showcase iç içe,
+                                              // bkz. _buildIcTimButton çağrı
+                                              // sitesi).
+                                              final Widget
+                                              medicineCard = AnimatedContainer(
+                                                key: ValueKey(medicine.id),
+                                                duration: const Duration(
+                                                  milliseconds: 300,
+                                                ),
+                                                margin: const EdgeInsets.only(
+                                                  bottom: 8,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: isTakenToday
+                                                      ? Colors.grey.shade100
+                                                      : Colors.white,
+                                                  borderRadius:
+                                                      BorderRadius.circular(14),
+                                                  boxShadow: isTakenToday
+                                                      ? []
+                                                      : [
+                                                          BoxShadow(
+                                                            color: Colors.black
+                                                                .withOpacity(
+                                                                  0.08,
+                                                                ),
+                                                            blurRadius: 6,
+                                                            offset:
+                                                                const Offset(
+                                                                  0,
+                                                                  2,
+                                                                ),
                                                           ),
-                                                        ),
-                                                      ],
-                                              ),
-                                              child: Material(
-                                                color: Colors.transparent,
-                                                borderRadius:
-                                                    BorderRadius.circular(14),
-                                                child: InkWell(
-                                                  onTap: () =>
+                                                        ],
+                                                ),
+                                                child: Material(
+                                                  color: Colors.transparent,
+                                                  borderRadius:
+                                                      BorderRadius.circular(14),
+                                                  child: InkWell(
+                                                    onTap: () {
+                                                      // Tur açıkken (spotlight
+                                                      // overlay'i translucent
+                                                      // olduğu için gerçek
+                                                      // dokunuş buraya da
+                                                      // ulaşabiliyor) ilaç
+                                                      // detay dialog'u turun
+                                                      // üzerine açılmasın.
+                                                      if (_onboardingTourActive) {
+                                                        return;
+                                                      }
                                                       _showMedicineDetails(
                                                         data,
                                                         medicine.id,
+                                                      );
+                                                    },
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          14,
+                                                        ),
+                                                    child: AnimatedContainer(
+                                                      duration: const Duration(
+                                                        milliseconds: 300,
                                                       ),
-                                                  borderRadius:
-                                                      BorderRadius.circular(14),
-                                                  child: AnimatedContainer(
-                                                    duration: const Duration(
-                                                      milliseconds: 300,
-                                                    ),
-                                                    decoration: BoxDecoration(
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                            14,
+                                                      decoration: BoxDecoration(
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              14,
+                                                            ),
+                                                        border: Border(
+                                                          left: BorderSide(
+                                                            color: isTakenToday
+                                                                ? Colors.green
+                                                                : Colors.orange,
+                                                            width: 5,
                                                           ),
-                                                      border: Border(
-                                                        left: BorderSide(
-                                                          color: isTakenToday
-                                                              ? Colors.green
-                                                              : Colors.orange,
-                                                          width: 5,
                                                         ),
                                                       ),
-                                                    ),
-                                                    padding:
-                                                        const EdgeInsets.symmetric(
-                                                          horizontal: 14,
-                                                          vertical: 8,
-                                                        ),
-                                                    // Üst satır (ikon + saat/isim +
-                                                    // buton) ile doz/kullanım
-                                                    // bilgisi artık ayrı satırlar -
-                                                    // eskiden doseInfo, isim+saat
-                                                    // Column'ının içindeydi, yani
-                                                    // Expanded genişliği İçtim
-                                                    // butonuyla paylaşılıyordu ve
-                                                    // uzun doz metinleri kesiliyordu
-                                                    // (ellipsis). Şimdi doseInfo
-                                                    // kartın tam genişliğinde,
-                                                    // butonla yer paylaşmayan kendi
-                                                    // satırında.
-                                                    child: Column(
-                                                      crossAxisAlignment:
-                                                          CrossAxisAlignment
-                                                              .start,
-                                                      children: [
-                                                        Row(
-                                                          // İçtim (+ Ertele)
-                                                          // buton alanı iki
-                                                          // satırlı bir
-                                                          // Column'a
-                                                          // çıktığından, ikon/
-                                                          // saat/isim
-                                                          // bloğuyla dikey
-                                                          // hizasının bozulmaması
-                                                          // için açıkça
-                                                          // ortalanıyor (Row'un
-                                                          // varsayılanı zaten
-                                                          // center, ama açıkça
-                                                          // yazmak niyeti
-                                                          // netleştiriyor).
-                                                          crossAxisAlignment:
-                                                              CrossAxisAlignment
-                                                                  .center,
-                                                          children: [
-                                                            AnimatedContainer(
-                                                              duration:
-                                                                  const Duration(
-                                                                    milliseconds:
-                                                                        300,
-                                                                  ),
-                                                              padding:
-                                                                  const EdgeInsets.all(
-                                                                    8,
-                                                                  ),
-                                                              decoration: BoxDecoration(
-                                                                color:
-                                                                    isTakenToday
-                                                                    ? Colors
-                                                                          .green
-                                                                          .shade50
-                                                                    : const Color(
-                                                                        0xFFE0F2F1,
-                                                                      ),
-                                                                shape: BoxShape
-                                                                    .circle,
-                                                              ),
-                                                              child: Icon(
-                                                                medIcon,
-                                                                size: 24,
-                                                                color:
-                                                                    isTakenToday
-                                                                    ? Colors
-                                                                          .green
-                                                                    : const Color(
-                                                                        0xFF4DB6AC,
-                                                                      ),
-                                                              ),
-                                                            ),
-                                                            const SizedBox(
-                                                              width: 12,
-                                                            ),
-                                                            Expanded(
-                                                              child: Column(
-                                                                crossAxisAlignment:
-                                                                    CrossAxisAlignment
-                                                                        .start,
-                                                                children: [
-                                                                  Text(
-                                                                    time,
-                                                                    style: TextStyle(
-                                                                      fontSize:
-                                                                          16,
-                                                                      fontWeight:
-                                                                          FontWeight
-                                                                              .bold,
-                                                                      color:
-                                                                          isTakenToday
-                                                                          ? AppColors.textSecondaryStrong
-                                                                          : const Color(
-                                                                              0xFF00695C,
-                                                                            ),
+                                                      padding:
+                                                          const EdgeInsets.symmetric(
+                                                            horizontal: 14,
+                                                            vertical: 8,
+                                                          ),
+                                                      // Üst satır (ikon + saat/isim +
+                                                      // buton) ile doz/kullanım
+                                                      // bilgisi artık ayrı satırlar -
+                                                      // eskiden doseInfo, isim+saat
+                                                      // Column'ının içindeydi, yani
+                                                      // Expanded genişliği İçtim
+                                                      // butonuyla paylaşılıyordu ve
+                                                      // uzun doz metinleri kesiliyordu
+                                                      // (ellipsis). Şimdi doseInfo
+                                                      // kartın tam genişliğinde,
+                                                      // butonla yer paylaşmayan kendi
+                                                      // satırında.
+                                                      child: Column(
+                                                        crossAxisAlignment:
+                                                            CrossAxisAlignment
+                                                                .start,
+                                                        children: [
+                                                          Row(
+                                                            // İçtim (+ Ertele)
+                                                            // buton alanı iki
+                                                            // satırlı bir
+                                                            // Column'a
+                                                            // çıktığından, ikon/
+                                                            // saat/isim
+                                                            // bloğuyla dikey
+                                                            // hizasının bozulmaması
+                                                            // için açıkça
+                                                            // ortalanıyor (Row'un
+                                                            // varsayılanı zaten
+                                                            // center, ama açıkça
+                                                            // yazmak niyeti
+                                                            // netleştiriyor).
+                                                            crossAxisAlignment:
+                                                                CrossAxisAlignment
+                                                                    .center,
+                                                            children: [
+                                                              AnimatedContainer(
+                                                                duration:
+                                                                    const Duration(
+                                                                      milliseconds:
+                                                                          300,
                                                                     ),
-                                                                  ),
-                                                                  Row(
-                                                                    children: [
-                                                                      if (isCritical)
-                                                                        Icon(
-                                                                          Icons
-                                                                              .warning_amber_rounded,
-                                                                          size:
-                                                                              18,
-                                                                          color:
-                                                                              isTakenToday
-                                                                              ? AppColors.textSecondaryStrong
-                                                                              : Colors.redAccent,
+                                                                padding:
+                                                                    const EdgeInsets.all(
+                                                                      8,
+                                                                    ),
+                                                                decoration: BoxDecoration(
+                                                                  color:
+                                                                      isTakenToday
+                                                                      ? Colors
+                                                                            .green
+                                                                            .shade50
+                                                                      : const Color(
+                                                                          0xFFE0F2F1,
                                                                         ),
-                                                                      if (isCritical)
-                                                                        const SizedBox(
-                                                                          width:
-                                                                              4,
+                                                                  shape: BoxShape
+                                                                      .circle,
+                                                                ),
+                                                                child: Icon(
+                                                                  medIcon,
+                                                                  size: 24,
+                                                                  color:
+                                                                      isTakenToday
+                                                                      ? Colors
+                                                                            .green
+                                                                      : const Color(
+                                                                          0xFF4DB6AC,
                                                                         ),
-                                                                      Expanded(
-                                                                        child: Text(
-                                                                          medName,
-                                                                          style: GoogleFonts.poppins(
-                                                                            fontSize:
+                                                                ),
+                                                              ),
+                                                              const SizedBox(
+                                                                width: 12,
+                                                              ),
+                                                              Expanded(
+                                                                child: Column(
+                                                                  crossAxisAlignment:
+                                                                      CrossAxisAlignment
+                                                                          .start,
+                                                                  children: [
+                                                                    Text(
+                                                                      time,
+                                                                      style: TextStyle(
+                                                                        fontSize:
+                                                                            16,
+                                                                        fontWeight:
+                                                                            FontWeight.bold,
+                                                                        color:
+                                                                            isTakenToday
+                                                                            ? AppColors.textSecondaryStrong
+                                                                            : const Color(
+                                                                                0xFF00695C,
+                                                                              ),
+                                                                      ),
+                                                                    ),
+                                                                    Row(
+                                                                      children: [
+                                                                        if (isCritical)
+                                                                          Icon(
+                                                                            Icons.warning_amber_rounded,
+                                                                            size:
                                                                                 18,
-                                                                            fontWeight:
-                                                                                FontWeight.w700,
                                                                             color:
                                                                                 isTakenToday
                                                                                 ? AppColors.textSecondaryStrong
-                                                                                : Colors.black87,
-                                                                            decoration:
-                                                                                isTakenToday
-                                                                                ? TextDecoration.lineThrough
-                                                                                : null,
+                                                                                : Colors.redAccent,
                                                                           ),
-                                                                          maxLines:
-                                                                              1,
-                                                                          overflow:
-                                                                              TextOverflow.ellipsis,
-                                                                        ),
-                                                                      ),
-                                                                    ],
-                                                                  ),
-                                                                ],
-                                                              ),
-                                                            ),
-                                                            if (isTakenToday)
-                                                              // İlaç zaten alınmış: mevcut davranış korunuyor -
-                                                              // kompakt yeşil check ikonu, tekrar dokununca
-                                                              // "alınmadı"ya geri alınabiliyor (_toggleTaken iki
-                                                              // yönlü çalışıyor).
-                                                              IconButton(
-                                                                onPressed: () =>
-                                                                    _toggleTaken(
-                                                                      medicine
-                                                                          .id,
-                                                                      medName,
-                                                                      isTakenToday,
-                                                                      today,
-                                                                    ),
-                                                                icon: const Icon(
-                                                                  Icons
-                                                                      .check_circle,
-                                                                  color: Colors
-                                                                      .green,
-                                                                  size: 28,
-                                                                ),
-                                                                padding:
-                                                                    EdgeInsets
-                                                                        .zero,
-                                                                constraints:
-                                                                    const BoxConstraints(),
-                                                              )
-                                                            else
-                                                              // Alınmamış durum: eskiden belirsiz bir zil
-                                                              // ikonuydu (ne anlama geldiği net değildi) -
-                                                              // artık ikon + "İçtim" yazılı, hap şeklinde
-                                                              // kompakt bir buton. Min 48dp dokunma alanı
-                                                              // (Container height: 48) korunuyor, ama tam
-                                                              // genişlik kaplamıyor - alt alta birden fazla
-                                                              // ilaç kartı olduğunda dikey yer israf etmiyor.
-                                                              //
-                                                              // "Ertele" burada YOK artık - bu satırda
-                                                              // (üst satır: ikon+isim/saat+buton) İçtim'in
-                                                              // altına eklenince buton bloğu (İçtim+Ertele
-                                                              // ≈84px) isim/saat bloğundan (≈42px) çok daha
-                                                              // uzun oluyordu; Row crossAxisAlignment.center
-                                                              // her çocuğu KENDİ boyutuna göre ortaladığından
-                                                              // (Row'un genel yüksekliğine STRETCH etmiyor),
-                                                              // en uzun çocuk (buton) satırın tamamını
-                                                              // kaplayıp İçtim'i tepeye, "fazladan alanı"
-                                                              // Ertele'nin altına yapıştırıyordu -
-                                                              // mainAxisAlignment/crossAxisAlignment
-                                                              // ayarlarıyla düzeltilemeyen yapısal bir
-                                                              // sonuçtu (bkz. CLAUDE.md). Ertele artık alt
-                                                              // satırda (doz bilgisinin yanında) - bu satır
-                                                              // yeniden sadece İçtim içeriyor, isim/saat
-                                                              // bloğuyla benzer yükseklikte olduğu için
-                                                              // .center doğal/dengeli çalışıyor.
-                                                              // İlk (index 0)
-                                                              // İçtim butonu
-                                                              // onboarding
-                                                              // turunun
-                                                              // spotlight
-                                                              // hedefi —
-                                                              // sıralama
-                                                              // önce
-                                                              // alınmamışları
-                                                              // gösterdiği
-                                                              // için index 0
-                                                              // her zaman bu
-                                                              // dalda
-                                                              // (isTakenToday
-                                                              // == false).
-                                                              // Hedef hiç
-                                                              // render
-                                                              // edilmezse
-                                                              // (ör. bugün
-                                                              // hiç ilaç
-                                                              // yoksa) tur
-                                                              // skipIfTargetNotPresent
-                                                              // ile bu adımı
-                                                              // sessizce
-                                                              // atlar.
-                                                              index == 0
-                                                                  ? Showcase.withWidget(
-                                                                      key:
-                                                                          _icTimShowcaseKey,
-                                                                      scope:
-                                                                          _homeTourScope,
-                                                                      targetPadding:
-                                                                          const EdgeInsets.all(
-                                                                            4,
+                                                                        if (isCritical)
+                                                                          const SizedBox(
+                                                                            width:
+                                                                                4,
                                                                           ),
-                                                                      container: OnboardingTooltipCard(
-                                                                        title:
-                                                                            "İlacını Aldığında",
-                                                                        description:
-                                                                            "İlacını içtiğinde bu butona dokun — "
-                                                                            "yakının haberdar olsun, sen de puan kazan.",
-                                                                        buttonLabel:
-                                                                            "Anladım, Başlayalım!",
-                                                                        onNext: () =>
-                                                                            _homeTourView.next(
-                                                                              force: true,
-                                                                            ),
-                                                                        showCloseButton:
-                                                                            _onboardingTourIsManual,
-                                                                        onClose: () =>
-                                                                            _homeTourView.dismiss(),
-                                                                      ),
-                                                                      child:
-                                                                          _buildIcTimButton(
-                                                                            medicine.id,
+                                                                        Expanded(
+                                                                          child: Text(
                                                                             medName,
-                                                                            isTakenToday,
-                                                                            today,
+                                                                            style: GoogleFonts.poppins(
+                                                                              fontSize: 18,
+                                                                              fontWeight: FontWeight.w700,
+                                                                              color: isTakenToday
+                                                                                  ? AppColors.textSecondaryStrong
+                                                                                  : Colors.black87,
+                                                                              decoration: isTakenToday
+                                                                                  ? TextDecoration.lineThrough
+                                                                                  : null,
+                                                                            ),
+                                                                            maxLines:
+                                                                                1,
+                                                                            overflow:
+                                                                                TextOverflow.ellipsis,
                                                                           ),
-                                                                    )
-                                                                  : _buildIcTimButton(
-                                                                      medicine
-                                                                          .id,
-                                                                      medName,
-                                                                      isTakenToday,
-                                                                      today,
+                                                                        ),
+                                                                      ],
                                                                     ),
-                                                          ],
-                                                        ),
-                                                        const SizedBox(
-                                                          height: 8,
-                                                        ),
-                                                        // Alt satır: solda doz/kullanım bilgisi, sağda
-                                                        // (sadece alınmamışsa) "Ertele" metin-linki - aynı
-                                                        // hizada, İçtim'in altında/yanında durma ihtiyacını
-                                                        // üst satırdaki hizalama sorununa girmeden
-                                                        // karşılıyor. Expanded, doseInfo uzun olsa bile
-                                                        // Ertele'yi sağda güvenle konumlandırıyor (satır
-                                                        // taşmıyor).
-                                                        Row(
-                                                          children: [
-                                                            Expanded(
-                                                              child: Text(
-                                                                doseInfo,
-                                                                style: const TextStyle(
-                                                                  fontSize: 16,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .w500,
-                                                                  // Tek renk: eskiden alındığında grey.shade400
-                                                                  // metin grey.shade100 kart zemininde neredeyse
-                                                                  // okunmuyordu (kontrast < 2:1). textSecondaryStrong
-                                                                  // hem beyaz hem grey.shade100 zeminde ~5:1+ verir.
-                                                                  color: AppColors
-                                                                      .textSecondaryStrong,
+                                                                  ],
                                                                 ),
-                                                                maxLines: 1,
-                                                                overflow:
-                                                                    TextOverflow
-                                                                        .ellipsis,
                                                               ),
-                                                            ),
-                                                            if (showErtele) ...[
-                                                              const SizedBox(
-                                                                width: 8,
-                                                              ),
-                                                              TextButton(
-                                                                onPressed: () =>
-                                                                    _postponeMedicine(
-                                                                      medicine
-                                                                          .id,
-                                                                      data,
-                                                                    ),
-                                                                style: TextButton.styleFrom(
+                                                              if (isTakenToday)
+                                                                // İlaç zaten alınmış: mevcut davranış korunuyor -
+                                                                // kompakt yeşil check ikonu, tekrar dokununca
+                                                                // "alınmadı"ya geri alınabiliyor (_toggleTaken iki
+                                                                // yönlü çalışıyor).
+                                                                IconButton(
+                                                                  onPressed: () =>
+                                                                      _toggleTaken(
+                                                                        medicine
+                                                                            .id,
+                                                                        medName,
+                                                                        isTakenToday,
+                                                                        today,
+                                                                      ),
+                                                                  icon: const Icon(
+                                                                    Icons
+                                                                        .check_circle,
+                                                                    color: Colors
+                                                                        .green,
+                                                                    size: 28,
+                                                                  ),
                                                                   padding:
-                                                                      const EdgeInsets.symmetric(
-                                                                        horizontal:
-                                                                            8,
+                                                                      EdgeInsets
+                                                                          .zero,
+                                                                  constraints:
+                                                                      const BoxConstraints(),
+                                                                )
+                                                              else
+                                                                // Alınmamış durum: eskiden belirsiz bir zil
+                                                                // ikonuydu (ne anlama geldiği net değildi) -
+                                                                // artık ikon + "İçtim" yazılı, hap şeklinde
+                                                                // kompakt bir buton. Min 48dp dokunma alanı
+                                                                // (Container height: 48) korunuyor, ama tam
+                                                                // genişlik kaplamıyor - alt alta birden fazla
+                                                                // ilaç kartı olduğunda dikey yer israf etmiyor.
+                                                                //
+                                                                // "Ertele" burada YOK artık - bu satırda
+                                                                // (üst satır: ikon+isim/saat+buton) İçtim'in
+                                                                // altına eklenince buton bloğu (İçtim+Ertele
+                                                                // ≈84px) isim/saat bloğundan (≈42px) çok daha
+                                                                // uzun oluyordu; Row crossAxisAlignment.center
+                                                                // her çocuğu KENDİ boyutuna göre ortaladığından
+                                                                // (Row'un genel yüksekliğine STRETCH etmiyor),
+                                                                // en uzun çocuk (buton) satırın tamamını
+                                                                // kaplayıp İçtim'i tepeye, "fazladan alanı"
+                                                                // Ertele'nin altına yapıştırıyordu -
+                                                                // mainAxisAlignment/crossAxisAlignment
+                                                                // ayarlarıyla düzeltilemeyen yapısal bir
+                                                                // sonuçtu (bkz. CLAUDE.md). Ertele artık alt
+                                                                // satırda (doz bilgisinin yanında) - bu satır
+                                                                // yeniden sadece İçtim içeriyor, isim/saat
+                                                                // bloğuyla benzer yükseklikte olduğu için
+                                                                // .center doğal/dengeli çalışıyor.
+                                                                // İlk (index 0)
+                                                                // İçtim butonu
+                                                                // onboarding
+                                                                // turunun
+                                                                // spotlight
+                                                                // hedefi —
+                                                                // sıralama
+                                                                // önce
+                                                                // alınmamışları
+                                                                // gösterdiği
+                                                                // için index 0
+                                                                // her zaman bu
+                                                                // dalda
+                                                                // (isTakenToday
+                                                                // == false).
+                                                                // Hedef hiç
+                                                                // render
+                                                                // edilmezse
+                                                                // (ör. bugün
+                                                                // hiç ilaç
+                                                                // yoksa) tur
+                                                                // skipIfTargetNotPresent
+                                                                // ile bu adımı
+                                                                // sessizce
+                                                                // atlar.
+                                                                index == 0
+                                                                    ? Showcase.withWidget(
+                                                                        key:
+                                                                            _icTimShowcaseKey,
+                                                                        scope:
+                                                                            homeTourScope,
+                                                                        targetPadding:
+                                                                            const EdgeInsets.all(
+                                                                              4,
+                                                                            ),
+                                                                        container: OnboardingTooltipCard(
+                                                                          title:
+                                                                              "İlacını Aldığında",
+                                                                          description:
+                                                                              "İlacını içtiğinde bu butona dokun — "
+                                                                              "yakının haberdar olsun, sen de puan kazan.",
+                                                                          buttonLabel:
+                                                                              "Anladım, Başlayalım!",
+                                                                          onNext: () => _homeTourView.next(
+                                                                            force:
+                                                                                true,
+                                                                          ),
+                                                                          showCloseButton:
+                                                                              _onboardingTourIsManual,
+                                                                          onClose: () =>
+                                                                              _homeTourView.dismiss(),
+                                                                        ),
+                                                                        child: _buildIcTimButton(
+                                                                          medicine
+                                                                              .id,
+                                                                          medName,
+                                                                          isTakenToday,
+                                                                          today,
+                                                                        ),
+                                                                      )
+                                                                    : _buildIcTimButton(
+                                                                        medicine
+                                                                            .id,
+                                                                        medName,
+                                                                        isTakenToday,
+                                                                        today,
                                                                       ),
-                                                                  minimumSize:
-                                                                      const Size(
-                                                                        48,
-                                                                        32,
-                                                                      ),
-                                                                  tapTargetSize:
-                                                                      MaterialTapTargetSize
-                                                                          .shrinkWrap,
-                                                                ),
+                                                            ],
+                                                          ),
+                                                          const SizedBox(
+                                                            height: 8,
+                                                          ),
+                                                          // Alt satır: solda doz/kullanım bilgisi, sağda
+                                                          // (sadece alınmamışsa) "Ertele" metin-linki - aynı
+                                                          // hizada, İçtim'in altında/yanında durma ihtiyacını
+                                                          // üst satırdaki hizalama sorununa girmeden
+                                                          // karşılıyor. Expanded, doseInfo uzun olsa bile
+                                                          // Ertele'yi sağda güvenle konumlandırıyor (satır
+                                                          // taşmıyor).
+                                                          Row(
+                                                            children: [
+                                                              Expanded(
                                                                 child: Text(
-                                                                  "Ertele",
-                                                                  style: GoogleFonts.poppins(
-                                                                    color: AppColors
-                                                                        .textSecondaryStrong,
+                                                                  doseInfo,
+                                                                  style: const TextStyle(
                                                                     fontSize:
-                                                                        13,
+                                                                        16,
                                                                     fontWeight:
                                                                         FontWeight
-                                                                            .w600,
-                                                                    decoration:
-                                                                        TextDecoration
-                                                                            .underline,
+                                                                            .w500,
+                                                                    // Tek renk: eskiden alındığında grey.shade400
+                                                                    // metin grey.shade100 kart zemininde neredeyse
+                                                                    // okunmuyordu (kontrast < 2:1). textSecondaryStrong
+                                                                    // hem beyaz hem grey.shade100 zeminde ~5:1+ verir.
+                                                                    color: AppColors
+                                                                        .textSecondaryStrong,
                                                                   ),
+                                                                  maxLines: 1,
+                                                                  overflow:
+                                                                      TextOverflow
+                                                                          .ellipsis,
                                                                 ),
                                                               ),
+                                                              if (showErtele) ...[
+                                                                const SizedBox(
+                                                                  width: 8,
+                                                                ),
+                                                                TextButton(
+                                                                  onPressed: () =>
+                                                                      _postponeMedicine(
+                                                                        medicine
+                                                                            .id,
+                                                                        data,
+                                                                      ),
+                                                                  style: TextButton.styleFrom(
+                                                                    padding:
+                                                                        const EdgeInsets.symmetric(
+                                                                          horizontal:
+                                                                              8,
+                                                                        ),
+                                                                    minimumSize:
+                                                                        const Size(
+                                                                          48,
+                                                                          32,
+                                                                        ),
+                                                                    tapTargetSize:
+                                                                        MaterialTapTargetSize
+                                                                            .shrinkWrap,
+                                                                  ),
+                                                                  child: Text(
+                                                                    "Ertele",
+                                                                    style: GoogleFonts.poppins(
+                                                                      color: AppColors
+                                                                          .textSecondaryStrong,
+                                                                      fontSize:
+                                                                          13,
+                                                                      fontWeight:
+                                                                          FontWeight
+                                                                              .w600,
+                                                                      decoration:
+                                                                          TextDecoration
+                                                                              .underline,
+                                                                    ),
+                                                                  ),
+                                                                ),
+                                                              ],
                                                             ],
-                                                          ],
-                                                        ),
-                                                      ],
+                                                          ),
+                                                        ],
+                                                      ),
                                                     ),
                                                   ),
                                                 ),
-                                              ),
-                                            );
-                                          },
-                                        ),
+                                              );
+                                              return index == 0
+                                                  ? Showcase.withWidget(
+                                                      key: _medCardShowcaseKey,
+                                                      scope: homeTourScope,
+                                                      targetPadding:
+                                                          const EdgeInsets.all(
+                                                            4,
+                                                          ),
+                                                      container: OnboardingTooltipCard(
+                                                        title: "İlaç Kartı",
+                                                        description:
+                                                            "Her kart bir "
+                                                            "ilacını gösterir: "
+                                                            "saati, adı, dozu "
+                                                            "ve kullanım "
+                                                            "şekli.",
+                                                        buttonLabel: "Anladım",
+                                                        onNext: () =>
+                                                            _homeTourView.next(
+                                                              force: true,
+                                                            ),
+                                                        showCloseButton:
+                                                            _onboardingTourIsManual,
+                                                        onClose: () =>
+                                                            _homeTourView
+                                                                .dismiss(),
+                                                      ),
+                                                      child: medicineCard,
+                                                    )
+                                                  : medicineCard;
+                                            },
+                                          ),
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                       ),
@@ -2212,6 +2354,23 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  /// Dalga 1'in 5 adımı, sırayla — SOS/Yardım Al/İlaç listesi/zaman dilimi
+  /// filtreleri/navbar. Bu widget'ların hepsi HER ZAMAN render ediliyor
+  /// (ilaç sayısı 0 olsa bile), skip riski yok - bkz. OnboardingFlags.
+  List<GlobalKey> get _wave1Keys => [
+    _sosShowcaseKey,
+    _yardimAlShowcaseKey,
+    _medsListShowcaseKey,
+    _timeFiltersShowcaseKey,
+    homeNavbarShowcaseKey,
+  ];
+
+  /// Dalga 2'nin 2 adımı, sırayla — tekil ilaç kartı ÖNCE, İçtim butonu
+  /// SONRA (kartın genel yapısını anlat, sonra butona odaklan). İkisinin de
+  /// hedefi bugünün ilk alınmamış ilacı - yoksa skipIfTargetNotPresent ile
+  /// ikisi de atlanır.
+  List<GlobalKey> get _wave2Keys => [_medCardShowcaseKey, _icTimShowcaseKey];
+
   /// Home sekmesine her girişte (userSnap verisi ilk kez geldiğinde) bir kez
   /// çağrılır — `_hasCheckedHomeOnboarding` bayrağı, BU SAYFA AÇIK KALDIĞI
   /// sürece userStream'in (ör. İçtim sonrası totalScore güncellemesiyle)
@@ -2219,12 +2378,13 @@ class _HomePageState extends State<HomePage> {
   /// tab değişiminde dispose/yeniden mount olduğu için (bkz. main.dart →
   /// MainLayout, `_pages[_currentIndex]`) her Home ziyaretinde bu kontrol
   /// yeniden çalışır — ör. kullanıcı Ekle'de ilk ilacını ekleyip Home'a
-  /// dönünce, `homeSos` zaten true olduğundan sadece İçtim adımı denenir.
+  /// dönünce, `homeIntro` zaten true olduğundan sadece dalga 2 (kart+İçtim)
+  /// denenir.
   ///
-  /// SOS ve İçtim BAĞIMSIZ bayraklarla takip edildiği için (bkz.
-  /// OnboardingFlags dokümantasyonu) sadece tamamlanmamış olan adım(lar)
-  /// `startShowCase`'e veriliyor - zaten tamamlanmış bir adım asla tekrar
-  /// otomatik gösterilmiyor.
+  /// Dalga 1 ve dalga 2 BAĞIMSIZ bayraklarla takip edildiği için (bkz.
+  /// OnboardingFlags dokümantasyonu) sadece tamamlanmamış olan dalga(lar)ın
+  /// adımları `startShowCase`'e veriliyor - zaten tamamlanmış bir dalga asla
+  /// tekrar otomatik gösterilmiyor.
   ///
   /// **Bug fix (gerçek cihazda bulundu):** Hızlı Başla/Kurtarma kodu
   /// akışları bu sayfayı (login_page.dart/quick_start_page.dart/
@@ -2247,17 +2407,17 @@ class _HomePageState extends State<HomePage> {
   void _maybeStartHomeOnboarding(Map<String, dynamic>? userData) {
     if (_hasCheckedHomeOnboarding) return;
     _hasCheckedHomeOnboarding = true;
-    final bool sosDone = OnboardingFlags.isCompletedFromData(
+    final bool introDone = OnboardingFlags.isCompletedFromData(
       userData,
-      OnboardingFlags.homeSos,
+      OnboardingFlags.homeIntro,
     );
     final bool medsDone = OnboardingFlags.isCompletedFromData(
       userData,
       OnboardingFlags.homeMeds,
     );
     final List<GlobalKey> pendingSteps = [
-      if (!sosDone) _sosShowcaseKey,
-      if (!medsDone) _icTimShowcaseKey,
+      if (!introDone) ..._wave1Keys,
+      if (!medsDone) ..._wave2Keys,
     ];
     if (pendingSteps.isEmpty) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -2267,29 +2427,27 @@ class _HomePageState extends State<HomePage> {
       // başlatma - bkz. yukarıdaki "Bug fix" notu.
       final route = ModalRoute.of(context);
       if (route != null && !route.isCurrent) return;
-      setState(() {
-        _onboardingTourActive = true;
-        _onboardingTourIsManual = false;
-      });
+      setState(() => _setOnboardingTourActive(true));
       _homeTourView.startShowCase(pendingSteps);
     });
   }
 
   /// "Yardım Al" butonu — daha önce tamamlanmış olsa bile turu manuel olarak
-  /// yeniden başlatır. Manuel modda tooltip kartında bir kapatma (X) ikonu
-  /// belirir (bkz. _onboardingTourIsManual → OnboardingTooltipCard).
+  /// baştan (7 adımın hepsini sırayla) yeniden başlatır. Manuel modda
+  /// tooltip kartında bir kapatma (X) ikonu belirir (bkz.
+  /// _onboardingTourIsManual → OnboardingTooltipCard). Dalga 2'nin hedefi
+  /// (ilaç kartı/İçtim) yoksa her zamanki gibi skipIfTargetNotPresent ile
+  /// sessizce atlanır - "tekrar öğren" niyeti tamdır, dalga tamamlanma
+  /// durumuna bakılmaz.
   void _startHomeTourManually() {
-    setState(() {
-      _onboardingTourActive = true;
-      _onboardingTourIsManual = true;
-    });
+    setState(() => _setOnboardingTourActive(true, manual: true));
     // setState'in tetiklediği rebuild tamamlanmadan startShowCase çağrılırsa
     // Showcase.withWidget'ın container'ı (OnboardingTooltipCard) hâlâ eski
     // _onboardingTourIsManual değeriyle (false, kapatma ikonu gizli) inşa
     // edilmiş olabilir — post-frame callback bu sırayı garanti eder.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      _homeTourView.startShowCase([_sosShowcaseKey, _icTimShowcaseKey]);
+      _homeTourView.startShowCase([..._wave1Keys, ..._wave2Keys]);
     });
   }
 
@@ -2297,6 +2455,12 @@ class _HomePageState extends State<HomePage> {
   void dispose() {
     _relationsSubscription?.cancel();
     _homeTourView.unregister();
+    // Güvenlik ağı: bu sayfa tur açıkken (ör. anormal bir unmount senaryosu)
+    // dispose olursa, paylaşılan notifier true'da takılı kalıp navbar'ı
+    // kalıcı olarak dokunulamaz bırakmasın.
+    if (_onboardingTourActive) {
+      onboardingTourActiveNotifier.value = false;
+    }
     super.dispose();
   }
 }

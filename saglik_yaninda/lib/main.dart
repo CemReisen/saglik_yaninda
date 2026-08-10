@@ -21,6 +21,9 @@ import 'package:saglik_yaninda/pages/auth/quick_start_page.dart';
 import 'package:saglik_yaninda/pages/auth/recovery_code_page.dart';
 import 'package:saglik_yaninda/services/notification_service.dart';
 import 'package:saglik_yaninda/pages/caregiver/caregiver_home_page.dart';
+import 'package:showcaseview/showcaseview.dart';
+import 'package:saglik_yaninda/widgets/onboarding/onboarding_tooltip_card.dart';
+import 'package:saglik_yaninda/widgets/onboarding/home_tour_shared.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/app_colors.dart';
 import 'core/app_navigator_key.dart';
@@ -313,196 +316,247 @@ class _MainLayoutState extends State<MainLayout> {
             Expanded(child: _pages[_currentIndex]),
 
             // 3. ALT MENÜ BÖLÜMÜ
-            Container(
-              margin: const EdgeInsets.only(
-                bottom: 12,
-                left: 16,
-                right: 16,
-                top: 8,
-              ),
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-              decoration: BoxDecoration(
-                color: AppColors.navbarBg,
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.15),
-                    blurRadius: 12,
-                    offset: const Offset(0, 6),
+            //
+            // Home onboarding turunun 5. (son) adımı bu navbar'ı
+            // spotlight'lıyor — navbar HomePage'in değil MainLayout'un
+            // widget ağacının bir parçası olduğu için, showcaseview'ın
+            // scope+GlobalKey eşleşmesi widget ağacı hiyerarşisinden bağımsız
+            // çalışmasından yararlanıyoruz (bkz. home_tour_shared.dart).
+            // Anahtar sadece HomePage'in `startShowCase` listesine dahil
+            // edildiğinde tetiklendiği için (Ekle/Profil turları bu anahtarı
+            // hiç kullanmıyor) bu adım SADECE Home'dayken çıkabiliyor.
+            //
+            // ValueListenableBuilder, tooltip kartındaki kapatma (X)
+            // ikonunun manuel/otomatik moda göre doğru görünmesini sağlıyor —
+            // bu bilgi (`_onboardingTourIsManual`) HomePage'in private bir
+            // alanı, MainLayout'un kendi rebuild döngüsünden bağımsız olarak
+            // paylaşılan `homeTourIsManualNotifier` üzerinden akıyor.
+            ValueListenableBuilder<bool>(
+              valueListenable: homeTourIsManualNotifier,
+              builder: (context, isManualTour, _) => Showcase.withWidget(
+                key: homeNavbarShowcaseKey,
+                scope: homeTourScope,
+                targetPadding: const EdgeInsets.all(4),
+                container: OnboardingTooltipCard(
+                  title: "Menü",
+                  description:
+                      "Buradan Ana Sayfa, Takvim, İlaç Ekle, Bildirimler ve "
+                      "Profil sayfalarına geçebilirsin.",
+                  buttonLabel: "Anladım",
+                  onNext: () =>
+                      ShowcaseView.getNamed(homeTourScope).next(force: true),
+                  showCloseButton: isManualTour,
+                  onClose: () => ShowcaseView.getNamed(homeTourScope).dismiss(),
+                ),
+                child: Container(
+                  margin: const EdgeInsets.only(
+                    bottom: 12,
+                    left: 16,
+                    right: 16,
+                    top: 8,
                   ),
-                ],
-              ),
-              child: Row(
-                children: List.generate(5, (index) {
-                  bool isSelected = _currentIndex == index;
-                  bool isAddButton = index == 2;
-                  const iconPaths = [
-                    'assets/icons/home.svg',
-                    'assets/icons/calendar.svg',
-                    'assets/icons/add.svg',
-                    'assets/icons/notification.svg',
-                    'assets/icons/profile.svg',
-                  ];
-                  // Her ikonun altındaki kısa etiket — ikon anlamı zaten
-                  // taşıdığı için etiket sadece teyit/hatırlatma görevi
-                  // görüyor, bu yüzden genel "ikincil metin ≥16sp" hedefinin
-                  // istisnası: 13sp, kalın. İkon boyutu (aşağıda) değişmedi.
-                  const labels = [
-                    'Ana Sayfa',
-                    'Takvim',
-                    'Ekle',
-                    'Bildirimler',
-                    'Profil',
-                  ];
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 8,
+                    horizontal: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.navbarBg,
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.15),
+                        blurRadius: 12,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: List.generate(5, (index) {
+                      bool isSelected = _currentIndex == index;
+                      bool isAddButton = index == 2;
+                      const iconPaths = [
+                        'assets/icons/home.svg',
+                        'assets/icons/calendar.svg',
+                        'assets/icons/add.svg',
+                        'assets/icons/notification.svg',
+                        'assets/icons/profile.svg',
+                      ];
+                      // Her ikonun altındaki kısa etiket — ikon anlamı zaten
+                      // taşıdığı için etiket sadece teyit/hatırlatma görevi
+                      // görüyor, bu yüzden genel "ikincil metin ≥16sp" hedefinin
+                      // istisnası: 13sp, kalın. İkon boyutu (aşağıda) değişmedi.
+                      const labels = [
+                        'Ana Sayfa',
+                        'Takvim',
+                        'Ekle',
+                        'Bildirimler',
+                        'Profil',
+                      ];
 
-                  // Etiket ve ikon aynı seçili/seçili-değil rengini paylaşır.
-                  Color labelColor = isSelected
-                      ? Colors.black
-                      : AppColors.navbarInactive;
+                      // Etiket ve ikon aynı seçili/seçili-değil rengini paylaşır.
+                      Color labelColor = isSelected
+                          ? Colors.black
+                          : AppColors.navbarInactive;
 
-                  Widget baseIcon = SvgPicture.asset(
-                    iconPaths[index],
-                    colorFilter: ColorFilter.mode(
-                      isAddButton ? Colors.white : labelColor,
-                      BlendMode.srcIn,
-                    ),
-                    width: isAddButton ? 34 : 28,
-                    height: isAddButton ? 34 : 28,
-                  );
+                      Widget baseIcon = SvgPicture.asset(
+                        iconPaths[index],
+                        colorFilter: ColorFilter.mode(
+                          isAddButton ? Colors.white : labelColor,
+                          BlendMode.srcIn,
+                        ),
+                        width: isAddButton ? 34 : 28,
+                        height: isAddButton ? 34 : 28,
+                      );
 
-                  Widget finalIcon = baseIcon;
+                      Widget finalIcon = baseIcon;
 
-                  if (index == 3) {
-                    finalIcon = StreamBuilder<QuerySnapshot>(
-                      stream: FirebaseFirestore.instance
-                          .collection('relations')
-                          .where(
-                            'elderId',
-                            isEqualTo: FirebaseAuth.instance.currentUser?.uid,
-                          )
-                          .where('status', isEqualTo: 'pending')
-                          .snapshots(),
-                      builder: (context, snapshot) {
-                        int pendingCount = 0;
-                        if (snapshot.hasData) {
-                          pendingCount = snapshot.data!.docs.length;
-                        }
+                      if (index == 3) {
+                        finalIcon = StreamBuilder<QuerySnapshot>(
+                          stream: FirebaseFirestore.instance
+                              .collection('relations')
+                              .where(
+                                'elderId',
+                                isEqualTo:
+                                    FirebaseAuth.instance.currentUser?.uid,
+                              )
+                              .where('status', isEqualTo: 'pending')
+                              .snapshots(),
+                          builder: (context, snapshot) {
+                            int pendingCount = 0;
+                            if (snapshot.hasData) {
+                              pendingCount = snapshot.data!.docs.length;
+                            }
 
-                        return Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            baseIcon,
-                            if (pendingCount > 0)
-                              Positioned(
-                                top: -4,
-                                right: -4,
-                                child: Container(
-                                  padding: const EdgeInsets.all(5),
-                                  decoration: const BoxDecoration(
-                                    color: Colors.redAccent,
-                                    shape: BoxShape.circle,
+                            return Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                baseIcon,
+                                if (pendingCount > 0)
+                                  Positioned(
+                                    top: -4,
+                                    right: -4,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(5),
+                                      decoration: const BoxDecoration(
+                                        color: Colors.redAccent,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Text(
+                                        pendingCount.toString(),
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
                                   ),
+                              ],
+                            );
+                          },
+                        );
+                      }
+
+                      // GestureDetector ikon+etiketin ikisini birden sarar —
+                      // dokunma alanı büyür (yaşlı kullanıcı için daha kolay
+                      // hedeflenir), etiketin de sekmeyi seçmesi sağlanır.
+                      //
+                      // Item'lar Expanded ile sarılı (sabit genişlik DEĞİL) —
+                      // önceki sürümde her item'ın etiketi sabit 68dp genişlikte
+                      // bir SizedBox'a oturuyordu: 5 item x 68dp = 340dp, bar'ın
+                      // margin (32dp) + padding (24dp) çıkarılmış genişliği
+                      // (ekran genişliği - 56dp) bunun altına düştüğünde
+                      // (ör. Samsung A53'te ~391dp ekran -> 335dp kullanılabilir
+                      // alan < 340dp) Row'un son çocuğu (Profil) RenderFlex
+                      // overflow veriyordu. Emülatörün daha geniş dp genişliği
+                      // bu açığı gizliyordu. Expanded, her item'ı mevcut alanın
+                      // tam 1/5'ine (hangi genişlik olursa olsun) esnetir; hiçbir
+                      // ekranda taşma olamaz.
+                      return Expanded(
+                        child: GestureDetector(
+                          onTap: () {
+                            // Home/Ekle/Profil onboarding turlarından biri
+                            // açıkken sekme değiştirmeye izin verme — aksi
+                            // halde gerçek bir sekme dokunuşu, o an tur
+                            // gösteren sayfayı (showcaseview'ın hedef
+                            // overlay'i translucent olduğu için gerçek
+                            // dokunuş spotlight'lanan widget'a da ulaşabiliyor)
+                            // ortasında unmount edip overlay'i sahipsiz
+                            // bırakırdı (bkz. home_tour_shared.dart).
+                            if (onboardingTourActiveNotifier.value) return;
+                            setState(() => _currentIndex = index);
+                          },
+                          behavior: HitTestBehavior.opaque,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              AnimatedContainer(
+                                duration: const Duration(milliseconds: 250),
+                                width: isAddButton ? 60 : 54,
+                                height: isAddButton ? 60 : 54,
+                                decoration: BoxDecoration(
+                                  color: isAddButton
+                                      ? AppColors.primary
+                                      : (isSelected
+                                            ? Colors.white
+                                            : Colors.transparent),
+                                  shape: isAddButton
+                                      ? BoxShape.circle
+                                      : BoxShape.rectangle,
+                                  borderRadius: isAddButton
+                                      ? null
+                                      : BorderRadius.circular(16),
+                                  boxShadow: isSelected && !isAddButton
+                                      ? [
+                                          BoxShadow(
+                                            color: Colors.black.withOpacity(
+                                              0.05,
+                                            ),
+                                            blurRadius: 4,
+                                          ),
+                                        ]
+                                      : (isAddButton
+                                            ? [
+                                                BoxShadow(
+                                                  color: AppColors.primary
+                                                      .withOpacity(0.3),
+                                                  blurRadius: 8,
+                                                  offset: const Offset(0, 4),
+                                                ),
+                                              ]
+                                            : []),
+                                ),
+                                child: Center(child: finalIcon),
+                              ),
+                              const SizedBox(height: 3),
+                              // Sabit width yerine: item'ın Expanded'dan aldığı
+                              // genişliğin tamamını kaplar (SizedBox(width:
+                              // double.infinity)), FittedBox(scaleDown) ise
+                              // "Bildirimler" gibi en uzun etiket dar bir ekranda
+                              // bile sığmazsa kelimeyi kesmek (ellipsis) yerine
+                              // yazı tipini orantılı küçültüp tam metni gösterir.
+                              SizedBox(
+                                width: double.infinity,
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
                                   child: Text(
-                                    pendingCount.toString(),
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
+                                    labels[index],
+                                    maxLines: 1,
+                                    style: GoogleFonts.nunito(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: labelColor,
                                     ),
                                   ),
                                 ),
                               ),
-                          ],
-                        );
-                      },
-                    );
-                  }
-
-                  // GestureDetector ikon+etiketin ikisini birden sarar —
-                  // dokunma alanı büyür (yaşlı kullanıcı için daha kolay
-                  // hedeflenir), etiketin de sekmeyi seçmesi sağlanır.
-                  //
-                  // Item'lar Expanded ile sarılı (sabit genişlik DEĞİL) —
-                  // önceki sürümde her item'ın etiketi sabit 68dp genişlikte
-                  // bir SizedBox'a oturuyordu: 5 item x 68dp = 340dp, bar'ın
-                  // margin (32dp) + padding (24dp) çıkarılmış genişliği
-                  // (ekran genişliği - 56dp) bunun altına düştüğünde
-                  // (ör. Samsung A53'te ~391dp ekran -> 335dp kullanılabilir
-                  // alan < 340dp) Row'un son çocuğu (Profil) RenderFlex
-                  // overflow veriyordu. Emülatörün daha geniş dp genişliği
-                  // bu açığı gizliyordu. Expanded, her item'ı mevcut alanın
-                  // tam 1/5'ine (hangi genişlik olursa olsun) esnetir; hiçbir
-                  // ekranda taşma olamaz.
-                  return Expanded(
-                    child: GestureDetector(
-                      onTap: () => setState(() => _currentIndex = index),
-                      behavior: HitTestBehavior.opaque,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          AnimatedContainer(
-                            duration: const Duration(milliseconds: 250),
-                            width: isAddButton ? 60 : 54,
-                            height: isAddButton ? 60 : 54,
-                            decoration: BoxDecoration(
-                              color: isAddButton
-                                  ? AppColors.primary
-                                  : (isSelected
-                                        ? Colors.white
-                                        : Colors.transparent),
-                              shape: isAddButton
-                                  ? BoxShape.circle
-                                  : BoxShape.rectangle,
-                              borderRadius: isAddButton
-                                  ? null
-                                  : BorderRadius.circular(16),
-                              boxShadow: isSelected && !isAddButton
-                                  ? [
-                                      BoxShadow(
-                                        color: Colors.black.withOpacity(0.05),
-                                        blurRadius: 4,
-                                      ),
-                                    ]
-                                  : (isAddButton
-                                        ? [
-                                            BoxShadow(
-                                              color: AppColors.primary
-                                                  .withOpacity(0.3),
-                                              blurRadius: 8,
-                                              offset: const Offset(0, 4),
-                                            ),
-                                          ]
-                                        : []),
-                            ),
-                            child: Center(child: finalIcon),
+                            ],
                           ),
-                          const SizedBox(height: 3),
-                          // Sabit width yerine: item'ın Expanded'dan aldığı
-                          // genişliğin tamamını kaplar (SizedBox(width:
-                          // double.infinity)), FittedBox(scaleDown) ise
-                          // "Bildirimler" gibi en uzun etiket dar bir ekranda
-                          // bile sığmazsa kelimeyi kesmek (ellipsis) yerine
-                          // yazı tipini orantılı küçültüp tam metni gösterir.
-                          SizedBox(
-                            width: double.infinity,
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Text(
-                                labels[index],
-                                maxLines: 1,
-                                style: GoogleFonts.nunito(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                  color: labelColor,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }),
+                        ),
+                      );
+                    }),
+                  ),
+                ),
               ),
             ),
           ],

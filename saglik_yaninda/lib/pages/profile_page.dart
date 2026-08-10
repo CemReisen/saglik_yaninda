@@ -8,6 +8,7 @@ import 'package:showcaseview/showcaseview.dart';
 import 'package:saglik_yaninda/core/theme/app_colors.dart';
 import 'package:saglik_yaninda/services/onboarding_service.dart';
 import 'package:saglik_yaninda/widgets/onboarding/onboarding_tooltip_card.dart';
+import 'package:saglik_yaninda/widgets/onboarding/home_tour_shared.dart';
 
 // StatelessWidget'tan StatefulWidget'a çevrildi (2026-08-10, onboarding turu
 // için) - bu sayfanın kendisi hiçbir alan/constructor parametresi
@@ -32,6 +33,15 @@ class _ProfilePageState extends State<ProfilePage> {
   bool _onboardingTourActive = false;
   bool _onboardingTourIsManual = false;
 
+  /// `_onboardingTourActive`'i, main.dart → MainLayout'un (sekme değişimi
+  /// engeli için) okuduğu paylaşılan notifier ile senkron tutar — bkz.
+  /// home_tour_shared.dart.
+  void _setOnboardingTourActive(bool active, {bool manual = false}) {
+    _onboardingTourActive = active;
+    _onboardingTourIsManual = manual;
+    onboardingTourActiveNotifier.value = active;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -40,14 +50,14 @@ class _ProfilePageState extends State<ProfilePage> {
       disableBarrierInteraction: true,
       skipIfTargetNotPresent: true,
       onFinish: () {
-        if (mounted) setState(() => _onboardingTourActive = false);
+        if (mounted) setState(() => _setOnboardingTourActive(false));
         final uid = FirebaseAuth.instance.currentUser?.uid;
         if (uid != null) {
           OnboardingFlags.markCompleted(uid, OnboardingFlags.profile);
         }
       },
       onDismiss: (_) {
-        if (mounted) setState(() => _onboardingTourActive = false);
+        if (mounted) setState(() => _setOnboardingTourActive(false));
       },
     );
   }
@@ -55,6 +65,11 @@ class _ProfilePageState extends State<ProfilePage> {
   @override
   void dispose() {
     _profileTourView.unregister();
+    // Güvenlik ağı: bu sayfa tur açıkken dispose olursa, paylaşılan notifier
+    // true'da takılı kalıp navbar'ı kalıcı olarak dokunulamaz bırakmasın.
+    if (_onboardingTourActive) {
+      onboardingTourActiveNotifier.value = false;
+    }
     super.dispose();
   }
 
@@ -73,10 +88,7 @@ class _ProfilePageState extends State<ProfilePage> {
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      setState(() {
-        _onboardingTourActive = true;
-        _onboardingTourIsManual = false;
-      });
+      setState(() => _setOnboardingTourActive(true));
       _profileTourView.startShowCase([_connectionCodeShowcaseKey]);
     });
   }
@@ -86,10 +98,7 @@ class _ProfilePageState extends State<ProfilePage> {
   /// bölümü). Ana tetikleyici Home'daki "Yardım Al" - bu, kullanıcı Profil'e
   /// gelmişken bağlantı kodu kartını tekrar görmek isterse yedek bir yol.
   void _startProfileTourManually() {
-    setState(() {
-      _onboardingTourActive = true;
-      _onboardingTourIsManual = true;
-    });
+    setState(() => _setOnboardingTourActive(true, manual: true));
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _profileTourView.startShowCase([_connectionCodeShowcaseKey]);
@@ -806,10 +815,7 @@ class _ProfilePageState extends State<ProfilePage> {
               color: AppColors.textSecondaryStrong,
             ),
           ),
-          trailing: const Icon(
-            Icons.chevron_right_rounded,
-            color: Colors.grey,
-          ),
+          trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
         ),
         if (!isLast)
           Divider(

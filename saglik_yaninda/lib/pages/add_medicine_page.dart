@@ -11,6 +11,7 @@ import 'package:saglik_yaninda/services/notification_service.dart';
 import 'package:saglik_yaninda/services/onboarding_service.dart';
 import 'package:saglik_yaninda/core/theme/app_colors.dart';
 import 'package:saglik_yaninda/widgets/onboarding/onboarding_tooltip_card.dart';
+import 'package:saglik_yaninda/widgets/onboarding/home_tour_shared.dart';
 
 class AddMedicinePage extends StatefulWidget {
   const AddMedicinePage({super.key});
@@ -141,7 +142,17 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
   final GlobalKey _saveButtonShowcaseKey = GlobalKey();
   late final ShowcaseView _addTourView;
   bool _onboardingTourActive = false;
-  bool _onboardingTourIsManual = false;
+  // Add sayfasında manuel bir "tekrar öğren" tetikleyicisi yok (kapsam
+  // kararı) - bu yüzden hiç true'ya çekilmiyor, final olabilir.
+  final bool _onboardingTourIsManual = false;
+
+  /// `_onboardingTourActive`'i, main.dart → MainLayout'un (sekme değişimi
+  /// engeli için) okuduğu paylaşılan notifier ile senkron tutar — bkz.
+  /// home_tour_shared.dart.
+  void _setOnboardingTourActive(bool active) {
+    _onboardingTourActive = active;
+    onboardingTourActiveNotifier.value = active;
+  }
 
   @override
   void initState() {
@@ -154,14 +165,14 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
       // spotlight başlarken ekran otomatik oraya kaydırılsın diye.
       enableAutoScroll: true,
       onFinish: () {
-        if (mounted) setState(() => _onboardingTourActive = false);
+        if (mounted) setState(() => _setOnboardingTourActive(false));
         final uid = FirebaseAuth.instance.currentUser?.uid;
         if (uid != null) {
           OnboardingFlags.markCompleted(uid, OnboardingFlags.add);
         }
       },
       onDismiss: (_) {
-        if (mounted) setState(() => _onboardingTourActive = false);
+        if (mounted) setState(() => _setOnboardingTourActive(false));
       },
     );
     _maybeStartAddOnboarding();
@@ -207,10 +218,7 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
     if (completed || !mounted) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      setState(() {
-        _onboardingTourActive = true;
-        _onboardingTourIsManual = false;
-      });
+      setState(() => _setOnboardingTourActive(true));
       _addTourView.startShowCase([_saveButtonShowcaseKey]);
     });
   }
@@ -223,6 +231,11 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
     _doseController.dispose();
     _descController.dispose();
     _addTourView.unregister();
+    // Güvenlik ağı: bu sayfa tur açıkken dispose olursa, paylaşılan notifier
+    // true'da takılı kalıp navbar'ı kalıcı olarak dokunulamaz bırakmasın.
+    if (_onboardingTourActive) {
+      onboardingTourActiveNotifier.value = false;
+    }
     super.dispose();
   }
 
