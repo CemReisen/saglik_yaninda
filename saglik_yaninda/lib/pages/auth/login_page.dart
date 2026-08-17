@@ -407,7 +407,7 @@ class _LoginPageState extends State<LoginPage> {
                     color: Colors.grey[600],
                   ),
                 ),
-                const SizedBox(height: 40),
+                const SizedBox(height: 26),
 
                 // Hızlı Başla — BİRİNCİL yöntem: yaşlı kullanıcı hedef
                 // kitlesi için e-posta/Google'dan önce geliyor (bkz.
@@ -463,7 +463,7 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 10),
                 // "Hesabınız yok mu? Kayıt Olun" - eskiden sayfanın en
                 // altındaydı (Google butonunun altında), kaydırmadan
                 // görünmüyordu. E-posta ile kayıt olan caregiver akışının
@@ -492,7 +492,7 @@ class _LoginPageState extends State<LoginPage> {
                   ],
                 ),
 
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
 
                 Row(
                   children: [
@@ -578,7 +578,7 @@ class _LoginPageState extends State<LoginPage> {
                   ],
                 ),
 
-                const SizedBox(height: 30),
+                const SizedBox(height: 22),
 
                 SizedBox(
                   width: double.infinity,
@@ -613,7 +613,7 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                 ),
 
-                const SizedBox(height: 20),
+                const SizedBox(height: 15),
 
                 Row(
                   children: [
@@ -632,7 +632,7 @@ class _LoginPageState extends State<LoginPage> {
                   ],
                 ),
 
-                const SizedBox(height: 20),
+                const SizedBox(height: 15),
 
                 SizedBox(
                   width: double.infinity,
