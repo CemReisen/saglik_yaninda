@@ -62,17 +62,27 @@ Caregiver kendi sesiyle kısa bir ses kaydı yapıp bildirim sesinin yerine koya
 - **Görsel ağırlık:** Büyük ve dikkat çekici olmalı ama SOS'un kırmızısıyla **karışmamalı** — farklı bir renkte olmalı ki SOS'un aciliyet algısı gölgelenmesin.
 - Ayrıca Profil sayfasında da erişilebilir bir "Tekrar Öğren" seçeneği bulunmalı (yedek erişim noktası).
 
-### Uygulama Durumu — TAMAMLANDI ✅ (son güncelleme 2026-08-10)
-Yukarıdaki gereksinimler uygulandı. Home ekranı turu, showcaseview paketiyle spotlight/vurgu tarzında, iki dalgalı ve şu an **8 adımlı**:
+### Uygulama Durumu — Elder tarafı TAMAMLANDI ✅ (son güncelleme 2026-08-10), Caregiver tarafı TAMAMLANDI ✅ (2026-08-17)
+Yukarıdaki gereksinimler **hem elder hem caregiver tarafında** uygulandı. Her iki tur da showcaseview paketiyle spotlight/vurgu tarzında, aynı prensiplerle (zorunlu ilk tur, "Anladım" ile ilerleme, manuel tekrar modunda X ile kapatma, `onboardingCompleted` alanları hesap bazlı).
 
+#### Elder — Home ekranı turu, iki dalgalı, **8 adımlı**
 - **Dalga 1 (5 adım):** SOS, Yardım Al (yukarıdaki "Nasıl Kullanılır" butonunun karşılığı — SOS'un yanında, ayrı renkte), İlaç Listesi, zaman dilimi filtreleri (Sabah/Öğle/Akşam/Gece çipleri), alt navbar.
-- **Dalga 2 (3 adım, ilk ilaç eklendikten sonra tetiklenir):** tekil ilaç kartı → **Otomatik/Manuel zaman dilimi toggle'ı** (yeni, 2026-08-10) → İçtim butonu.
+- **Dalga 2 (3 adım, ilk ilaç eklendikten sonra tetiklenir):** tekil ilaç kartı → **Otomatik/Manuel zaman dilimi toggle'ı** (2026-08-10) → İçtim butonu.
 
-Add ve Profil sayfalarının da kendi (ayrı, tek adımlı) tanıtım turları var. "Yardım Al" butonu turu istenildiği zaman baştan tekrar başlatabiliyor. Teknik detaylar, mimari kararlar ve commit geçmişi için bkz. `CLAUDE.md`.
+Add ve Profil sayfalarının da kendi (ayrı, tek adımlı) tanıtım turları var. "Yardım Al" butonu turu istenildiği zaman baştan tekrar başlatabiliyor.
 
-**Otomatik/Manuel zaman dilimi toggle'ı (2026-08-10 eklendi) — ne işe yarar:** İlaç Listesi kartı normalde günün 4 zaman dilimine (sabah/öğle/akşam/gece) göre otomatik filtreleniyor - kullanıcı sadece o anki dilimi görüyor. Sorun: kullanıcı sadece sabah ilacı kullanıyorsa, öğleden sonra kart hep boş görünüyordu. Kartın sağ üst köşesindeki saat ikonu bunu çözüyor:
+**Otomatik/Manuel zaman dilimi toggle'ı — ne işe yarar:** İlaç Listesi kartı normalde günün 4 zaman dilimine (sabah/öğle/akşam/gece) göre otomatik filtreleniyor - kullanıcı sadece o anki dilimi görüyor. Sorun: kullanıcı sadece sabah ilacı kullanıyorsa, öğleden sonra kart hep boş görünüyordu. Kartın sağ üst köşesindeki saat ikonu bunu çözüyor:
 - **Otomatik (varsayılan):** kart günün gerçek saatine göre dilim gösterir (mevcut/eski davranış), çipler "göz atma" amaçlı dokunulabilir ama seçim hiçbir yere kaydedilmez.
 - **Manuel:** butonu açarken kart her zaman "Sabah"tan başlar; kullanıcının seçtiği dilim kalıcı ("yapışkan") olarak hatırlanır — saat ilerlese/uygulama kapanıp açılsa da buton tekrar kapatılana kadar değişmez. Kapatılınca otomatik moda döner.
+
+#### Caregiver — Home + Profil turları, **4+1 adım** (2026-08-17 eklendi)
+Elder'daki AYNI mimariyle, ayrı flag alanlarıyla (`caregiver` önekli — aynı `users/{uid}` dokümanı iki rol için de kullanıldığından karışmasın diye).
+
+- **Home turu, 2 dalga, 4 adım:** Dalga 1 — "Yardım Al" (yeni, mor #7E57C2, dairesel ikon buton, "Yeni Yakın"ın solunda) → "Yeni Yakın". Dalga 2 — ilk yakın kartı → dürtme/zil ikonu (sadece o yakının o gün bekleyen ilacı varsa render edilir, kartın aksine garanti değil). Dalga 2'nin flag'i bilinçli olarak zil adımında değil **kart adımında** yazılıyor — sonsuz tekrar riskini önlemek için (detaylı gerekçe `CLAUDE.md`'de).
+- **Profil turu, tek adım:** "Takip Edilenleri Yönet" bölümü, + aynı sayfaya elder'daki `_buildHelpRow` görsel diliyle yeni bir "Tekrar Öğren" satırı eklendi (yedek erişim noktası).
+- Caregiver'ın alt navbar'ı da artık tur açıkken sekme değişimini engelliyor (elder'daki aynı crash-önleme korumasının caregiver muadili).
+
+Teknik detaylar, mimari kararlar ve commit geçmişi (elder + caregiver) için bkz. `CLAUDE.md`.
 
 ---
 
@@ -151,7 +161,7 @@ Hızlı Başla ile açılmış bir elder hesabının, Google/email ile açılmı
 ## Özet — Öncelik Sırası (Önerilen)
 
 1. **Kusursuz elder deneyimi** (mevcut UI revizyonu, bugüne kadarki çalışma) — devam ediyor.
-2. ~~Onboarding turu~~ → **TAMAMLANDI ✅** — Home (8 adım, iki dalga, artık Otomatik/Manuel zaman dilimi toggle'ı dahil) + Add/Profil (tek adımlı) turları uygulandı, bkz. yukarısı "3. Onboarding / Kullanıcı Eğitimi → Uygulama Durumu" ve `CLAUDE.md`.
+2. ~~Onboarding turu~~ → **TAMAMLANDI ✅ (elder + caregiver)** — Elder: Home (8 adım, iki dalga, Otomatik/Manuel zaman dilimi toggle'ı dahil) + Add/Profil (tek adımlı). Caregiver (2026-08-17): Home (4 adım, iki dalga) + Profil (tek adımlı, "Tekrar Öğren" satırıyla). Bkz. yukarısı "3. Onboarding / Kullanıcı Eğitimi → Uygulama Durumu" ve `CLAUDE.md`.
 3. ~~Telefon+SMS giriş akışı~~ → **Google + Email + Hızlı Başla + Kurtarma Kodu — TAMAMLANDI ✅ (2026-08-10)**, bkz. "4. Elder Kayıt / Giriş Akışı ve Yeni Cihaz Kurtarma" + `CLAUDE.md`. Kalan tek açık madde: Hızlı Başla × caregiver bağlantı çapraz testi (bkz. yukarısı, "Bilinen eksik test").
 4. **Play Store lansmanı** (Android-only, web dashboard olmadan).
 5. **Lansman sonrası:** monetizasyon özellikleri, caregiver web dashboard, iOS stratejisi.

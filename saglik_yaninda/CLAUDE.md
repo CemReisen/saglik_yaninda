@@ -239,3 +239,26 @@ Dalga 2 artık **3 adım**: kart → **Otomatik/Manuel dilim toggle'ı** (yeni, 
 Toplam Home turu artık **8 adım** (bkz. PRODUCT_NOTES.md → "3. Onboarding").
 
 **Kullanıcı cihazda test edip onayladı.** `flutter analyze`: her commit'te 0 yeni hata (95 info/warning, projede zaten var olan desenlerin tekrarı).
+
+## Caregiver Onboarding Turu Eklendi (2026-08-17)
+
+`ui-redesign` dalında, 1 commit: `683db67`. Elder Home/Profil turlarındaki AYNI mimariyle (showcaseview, zorunlu ilk tur + "Anladım" ile ilerleme, manuel tekrar modunda X ile kapatma, `onboardingCompleted` alanları hesap bazlı) caregiver tarafına da bir onboarding turu eklendi.
+
+### Yeni flag'ler (`onboarding_service.dart` → `OnboardingFlags`)
+`caregiverHomeIntro` (`onboardingCaregiverHomeIntroCompleted`), `caregiverHomeElder` (`onboardingCaregiverHomeElderCompleted`), `caregiverProfile` (`onboardingCaregiverProfileCompleted`) — elder'ın `homeIntro`/`homeMeds`/`profile` alanlarından bilinçli olarak AYRI adlarla: aynı `users/{uid}` dokümanı hem elder hem caregiver rolü için kullanıldığından, iki tarafın bayrakları karışmasın diye `caregiver` önekiyle ayrıştırıldı.
+
+### Ana sayfa turu (`CaregiverHomePage`, `StatelessWidget`'tan `StatefulWidget`'a çevrildi) — 2 dalga, 4 adım
+- **Dalga 1 (`caregiverHomeIntro`):** "Yardım Al" (yeni, mor `AppColors.helpAccent` #7E57C2, dairesel 40x40 ikon buton) → "Yeni Yakın". İkisi de her zaman render edilir (bağlı kimse olmasa da), skip riski yok — bayrak dalganın son adımında (Yardım Al) yazılır.
+- **Dalga 2 (`caregiverHomeElder`):** İlk yakın kartı (`_buildElderCard`, `isFirst: index==0`) → dürtme/zil ikonu (aynı kartın içinde, `Icons.notifications_active_rounded`). Elder'ın kart/İçtim çiftinden farklı olarak bu ikisi **all-or-nothing DEĞİL**: kart en az 1 onaylı bağlantı varsa her zaman mevcut, ama zil ikonu SADECE o yakının o gün bekleyen (alınmamış) bir ilacı varsa render ediliyor (`totalMeds > 0 && takenMeds < totalMeds`).
+
+**Flag stratejisi (kullanıcı onaylı, "Seçenek B"):** `caregiverHomeElder` bayrağı zil ikonu adımında DEĞİL, **kart adımında** yazılıyor. Gerekçe: elder'daki gibi "son adımda yaz" stratejisi burada kart+zil all-or-nothing olmadığı için sonsuz tekrar riski doğururdu — caregiver'ın yakını(ları) Home her açıldığında hiç bekleyen ilaç yoksa (gece geç saat, ya da yakın zaten hepsini içmişse) mini-tur her ziyarette sessizce yeniden denenmeye devam ederdi. Kart adımında yazmak bunu önlüyor; zil ikonu AYNI çalıştırmada (mevcutsa) hâlâ gösteriliyor, sadece flag'in tamamlanması ona bağlı değil — yedek erişim zaten "Yardım Al" ile manuel tekrarda her zaman mevcut (o her ikisini de, mevcutsa, sırayla gösterir).
+
+**Tetikleme noktası:** Elder'daki aynı bug fix gerekçesiyle (`_maybeStartHomeOnboarding`), `_maybeStartCaregiverHomeOnboarding` caregiver'ın kendi user-doc stream'inden DEĞİL, **relations StreamBuilder'ının builder'ından** çağrılıyor — dalga 2'nin hedefi (ilk yakın kartı) en az bir kez gerçek veriyle render olmuş olmalı, aksi halde `skipIfTargetNotPresent` onu kalıcı olarak atlar.
+
+### Profil sayfası turu (`CaregiverProfilePage`, `StatelessWidget`'tan `StatefulWidget`'a çevrildi) — tek adım
+Hedef: "Takip Edilenleri Yönet" başlığı + liste (elder Profil'deki bağlantı kodu kartı muadili, aynı tek-adımlı desen). Elder'daki `_buildHelpRow` ile aynı görsel dilde (mor/lavanta ikon, `AppColors.helpAccent`, aynı ListTile deseni) yeni bir **"Tekrar Öğren"** satırı eklendi — CaregiverProfilePage'de böyle bir "ayarlar listesi" widget'ı hiç yoktu, kendi kartında tek başına bir satır olarak eklendi.
+
+### Ek düzeltme: navbar tur-kilidi
+`CaregiverLayout`'un alt navbar'ı (home.svg/profile.svg, 2 sekme) artık `home_tour_shared.dart`'taki paylaşılan `onboardingTourActiveNotifier`'ı kontrol ediyor — herhangi bir caregiver turu açıkken sekme değişimine izin verilmiyor. Bu, elder tarafında `main.dart` → `MainLayout`'un aynı notifier'ı zaten kontrol etmesinin gerekçesiyle birebir aynı: showcaseview'ın hedef overlay'i varsayılan olarak translucent olduğu için, tur açıkken gerçek bir sekme dokunuşu spotlight'lanan widget'a da ulaşıp o an tur gösteren sayfayı ortasında unmount edip overlay'i sahipsiz bırakabilirdi. İki rol aynı anda hiç mount edilmediği için (kullanıcı ya elder ya caregiver layout'unu görür) paylaşılan tek global notifier'ı iki tarafın da kullanması güvenli — ayrı bir caregiver-özel notifier'a gerek yok.
+
+**Doğrulama:** `flutter analyze` — 0 yeni hata, 96 info (öncekiyle aynı `withOpacity` deseninin tekrarı). Kullanıcı cihazda test edip onayladı.
