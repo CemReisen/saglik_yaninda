@@ -6,7 +6,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:intl/intl.dart';
 import 'package:shimmer/shimmer.dart'; // 🔥 EFSANE ANİMASYON PAKETİ EKLENDİ
+import 'package:showcaseview/showcaseview.dart';
 import 'package:saglik_yaninda/core/theme/app_colors.dart';
+import 'package:saglik_yaninda/widgets/onboarding/onboarding_tooltip_card.dart';
+import 'package:saglik_yaninda/widgets/onboarding/home_tour_shared.dart';
+import 'package:saglik_yaninda/services/onboarding_service.dart';
 
 class CaregiverLayout extends StatefulWidget {
   const CaregiverLayout({super.key});
@@ -53,7 +57,18 @@ class _CaregiverLayoutState extends State<CaregiverLayout> {
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               GestureDetector(
-                onTap: () => setState(() => _currentIndex = 0),
+                onTap: () {
+                  // Home/Profil onboarding turlarından biri açıkken sekme
+                  // değiştirmeye izin verme - aksi halde gerçek bir sekme
+                  // dokunuşu (showcaseview'ın hedef overlay'i varsayılan
+                  // olarak translucent olduğu için spotlight'lanan widget'a
+                  // da ulaşabiliyor) o an tur gösteren sayfayı ortasında
+                  // unmount edip overlay'i sahipsiz bırakırdı - elder
+                  // tarafındaki aynı korumanın (main.dart → MainLayout)
+                  // caregiver muadili, aynı paylaşılan notifier kullanılıyor.
+                  if (onboardingTourActiveNotifier.value) return;
+                  setState(() => _currentIndex = 0);
+                },
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 250),
                   padding: const EdgeInsets.all(12),
@@ -77,7 +92,10 @@ class _CaregiverLayoutState extends State<CaregiverLayout> {
                 ),
               ),
               GestureDetector(
-                onTap: () => setState(() => _currentIndex = 1),
+                onTap: () {
+                  if (onboardingTourActiveNotifier.value) return;
+                  setState(() => _currentIndex = 1);
+                },
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 250),
                   padding: const EdgeInsets.all(12),
@@ -108,8 +126,143 @@ class _CaregiverLayoutState extends State<CaregiverLayout> {
   }
 }
 
-class CaregiverHomePage extends StatelessWidget {
+class CaregiverHomePage extends StatefulWidget {
   const CaregiverHomePage({super.key});
+
+  @override
+  State<CaregiverHomePage> createState() => _CaregiverHomePageState();
+}
+
+class _CaregiverHomePageState extends State<CaregiverHomePage> {
+  // --- Onboarding turu (Caregiver Home) ------------------------------------
+  // 2 dalgalı, 4 adımlı - bkz. OnboardingFlags dokümantasyonu için detaylı
+  // gerekçe. Elder'daki Home turunun aksine bu tur navbar'ı spotlight'lamıyor
+  // (istenmedi) - bu yüzden scope tamamen bu State'e özel/private kalabiliyor,
+  // home_tour_shared.dart'tan sadece `onboardingTourActiveNotifier`ı
+  // (CaregiverLayout'un alt navbar'ını tur sırasında kilitlemek için) ödünç
+  // alıyoruz.
+  static const String _caregiverHomeTourScope = 'caregiver_home_onboarding';
+  final GlobalKey _yardimAlShowcaseKey = GlobalKey();
+  final GlobalKey _yeniYakinShowcaseKey = GlobalKey();
+  final GlobalKey _elderCardShowcaseKey = GlobalKey();
+  final GlobalKey _nudgeIconShowcaseKey = GlobalKey();
+  late final ShowcaseView _homeTourView;
+  bool _hasCheckedCaregiverHomeOnboarding = false;
+  bool _onboardingTourActive = false;
+  bool _onboardingTourIsManual = false;
+
+  void _setOnboardingTourActive(bool active, {bool manual = false}) {
+    _onboardingTourActive = active;
+    _onboardingTourIsManual = manual;
+    onboardingTourActiveNotifier.value = active;
+  }
+
+  List<GlobalKey> get _wave1Keys => [
+    _yardimAlShowcaseKey,
+    _yeniYakinShowcaseKey,
+  ];
+
+  List<GlobalKey> get _wave2Keys => [
+    _elderCardShowcaseKey,
+    _nudgeIconShowcaseKey,
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _homeTourView = ShowcaseView.register(
+      scope: _caregiverHomeTourScope,
+      disableBarrierInteraction: true,
+      skipIfTargetNotPresent: true,
+      onComplete: (index, key) {
+        final uid = FirebaseAuth.instance.currentUser?.uid;
+        if (uid == null) return;
+        if (key == _yardimAlShowcaseKey) {
+          // Dalga 1'in son adımı.
+          OnboardingFlags.markCompleted(uid, OnboardingFlags.caregiverHomeIntro);
+        } else if (key == _elderCardShowcaseKey) {
+          // Dalga 2 - bilinçli olarak SON adımda (zil ikonu) değil, kart
+          // adımında yazılıyor - bkz. OnboardingFlags dokümantasyonu
+          // (Seçenek B, kullanıcı onaylı).
+          OnboardingFlags.markCompleted(uid, OnboardingFlags.caregiverHomeElder);
+        }
+      },
+      onFinish: () {
+        if (mounted) setState(() => _setOnboardingTourActive(false));
+      },
+      onDismiss: (_) {
+        if (mounted) setState(() => _setOnboardingTourActive(false));
+      },
+    );
+  }
+
+  /// Relations StreamBuilder'ının builder'ından çağrılır (caregiver'ın kendi
+  /// user-doc stream'inden DEĞİL) - dalga 2'nin hedefi (ilk yakın kartı)
+  /// itemBuilder'ın en az bir kez gerçek veriyle çalışmış olmasını
+  /// gerektiriyor, aksi halde skipIfTargetNotPresent onu sessizce ve kalıcı
+  /// olarak atlar (bkz. home_page.dart → _maybeStartHomeOnboarding'teki aynı
+  /// bug fix notu).
+  void _maybeStartCaregiverHomeOnboarding(Map<String, dynamic>? userData) {
+    if (_hasCheckedCaregiverHomeOnboarding) return;
+    _hasCheckedCaregiverHomeOnboarding = true;
+    final bool introDone = OnboardingFlags.isCompletedFromData(
+      userData,
+      OnboardingFlags.caregiverHomeIntro,
+    );
+    final bool elderDone = OnboardingFlags.isCompletedFromData(
+      userData,
+      OnboardingFlags.caregiverHomeElder,
+    );
+    final List<GlobalKey> pendingSteps = [
+      if (!introDone) ..._wave1Keys,
+      if (!elderDone) ..._wave2Keys,
+    ];
+    if (pendingSteps.isEmpty) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final route = ModalRoute.of(context);
+      if (route != null && !route.isCurrent) return;
+      _runOnboardingSequence(pendingSteps);
+    });
+  }
+
+  /// "Yardım Al" butonu - daha önce tamamlanmış olsa bile turu manuel olarak
+  /// baştan (4 adımın hepsini sırayla) yeniden başlatır.
+  void _startCaregiverHomeTourManually() {
+    _runOnboardingSequence([..._wave1Keys, ..._wave2Keys], manual: true);
+  }
+
+  void _runOnboardingSequence(List<GlobalKey> steps, {bool manual = false}) {
+    setState(() => _setOnboardingTourActive(true, manual: manual));
+
+    void start() {
+      if (!mounted) return;
+      try {
+        _homeTourView.startShowCase(steps);
+      } catch (e) {
+        debugPrint(
+          "Caregiver Home onboarding turu başlatılamadı (scope kaydı kayboldu): $e",
+        );
+        if (mounted) setState(() => _setOnboardingTourActive(false));
+      }
+    }
+
+    if (manual) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => start());
+    } else {
+      start();
+    }
+  }
+
+  @override
+  void dispose() {
+    _homeTourView.unregister();
+    if (_onboardingTourActive) {
+      onboardingTourActiveNotifier.value = false;
+    }
+    super.dispose();
+  }
 
   DateTime? _parseDate(String dateStr) {
     try {
@@ -344,11 +497,12 @@ class CaregiverHomePage extends StatelessWidget {
           .snapshots(),
       builder: (context, caregiverSnap) {
         String firstName = "Kullanıcı";
+        Map<String, dynamic>? userData;
 
         if (caregiverSnap.hasData && caregiverSnap.data!.exists) {
-          var data = caregiverSnap.data!.data() as Map<String, dynamic>;
+          userData = caregiverSnap.data!.data() as Map<String, dynamic>;
           String fullName =
-              data['name']?.toString().trim() ??
+              userData['name']?.toString().trim() ??
               user?.displayName ??
               "Kullanıcı";
           firstName = fullName.split(' ').first;
@@ -387,44 +541,127 @@ class CaregiverHomePage extends StatelessWidget {
                       ),
                     ],
                   ),
-                  InkWell(
-                    onTap: () => _showAddRelativeDialog(context),
-                    borderRadius: BorderRadius.circular(16),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF3949AB),
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFF3949AB).withOpacity(0.3),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.person_add_rounded,
-                            color: Colors.white,
-                            size: 18,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            "Yeni Yakın",
-                            style: GoogleFonts.poppins(
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // "Yardım Al" - SOS'un olmadığı caregiver tarafında
+                      // acil bir buton yok, bu yüzden elder'daki gibi kendi
+                      // geniş satırı yerine birincil aksiyonun ("Yeni Yakın")
+                      // hemen soluna, küçük dairesel bir ikon buton olarak
+                      // yerleştirildi - PRODUCT_NOTES'un "yan yana, farklı
+                      // renk" ilkesi korunuyor, ama "Yeni Yakın"ın görsel
+                      // ağırlığı gölgelenmiyor.
+                      Showcase.withWidget(
+                        key: _yardimAlShowcaseKey,
+                        scope: _caregiverHomeTourScope,
+                        targetPadding: const EdgeInsets.all(4),
+                        container: OnboardingTooltipCard(
+                          title: "Yardım Al",
+                          description:
+                              "Turu unuttuysan ya da tekrar izlemek "
+                              "istersen, istediğin zaman bu butona "
+                              "dokunabilirsin.",
+                          buttonLabel: "Anladım",
+                          onNext: () => _homeTourView.next(force: true),
+                          showCloseButton: _onboardingTourIsManual,
+                          onClose: () => _homeTourView.dismiss(),
+                        ),
+                        child: InkWell(
+                          onTap: () {
+                            // Tur açıkken (spotlight overlay'i translucent
+                            // olduğu için gerçek dokunuş buraya da
+                            // ulaşabiliyor) turun kendisi ortasında yeniden
+                            // başlatılmasın.
+                            if (_onboardingTourActive) return;
+                            _startCaregiverHomeTourManually();
+                          },
+                          borderRadius: BorderRadius.circular(20),
+                          child: Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: AppColors.helpAccent,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppColors.helpAccent.withOpacity(
+                                    0.35,
+                                  ),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 3),
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.help_outline_rounded,
                               color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
+                              size: 20,
                             ),
                           ),
-                        ],
+                        ),
                       ),
-                    ),
+                      const SizedBox(width: 10),
+                      Showcase.withWidget(
+                        key: _yeniYakinShowcaseKey,
+                        scope: _caregiverHomeTourScope,
+                        targetPadding: const EdgeInsets.all(4),
+                        container: OnboardingTooltipCard(
+                          title: "Yeni Yakın Ekle",
+                          description:
+                              "Takip etmek istediğin kişinin profilinde "
+                              "yazan bağlantı kodunu girerek ona "
+                              "bağlanabilirsin.",
+                          buttonLabel: "Anladım",
+                          onNext: () => _homeTourView.next(force: true),
+                          showCloseButton: _onboardingTourIsManual,
+                          onClose: () => _homeTourView.dismiss(),
+                        ),
+                        child: InkWell(
+                          onTap: () {
+                            if (_onboardingTourActive) return;
+                            _showAddRelativeDialog(context);
+                          },
+                          borderRadius: BorderRadius.circular(16),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF3949AB),
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(
+                                    0xFF3949AB,
+                                  ).withOpacity(0.3),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.person_add_rounded,
+                                  color: Colors.white,
+                                  size: 18,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  "Yeni Yakın",
+                                  style: GoogleFonts.poppins(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -441,6 +678,12 @@ class CaregiverHomePage extends StatelessWidget {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return _buildSkeletonLoader();
                   }
+
+                  // Dalga 2'nin hedefi (ilk yakın kartı) bu builder'ın en az
+                  // bir kez gerçek veriyle (relationCount 0 dahil) çalışmış
+                  // olmasını gerektiriyor - bkz. _maybeStartCaregiverHomeOnboarding
+                  // dokümantasyonu.
+                  _maybeStartCaregiverHomeOnboarding(userData);
 
                   int relationCount = snapshot.hasData
                       ? snapshot.data!.docs.length
@@ -477,7 +720,11 @@ class CaregiverHomePage extends StatelessWidget {
                     itemCount: relationCount,
                     itemBuilder: (context, index) {
                       String elderId = snapshot.data!.docs[index]['elderId'];
-                      return _buildElderCard(context, elderId);
+                      return _buildElderCard(
+                        context,
+                        elderId,
+                        isFirst: index == 0,
+                      );
                     },
                   );
                 },
@@ -490,7 +737,11 @@ class CaregiverHomePage extends StatelessWidget {
     );
   }
 
-  Widget _buildElderCard(BuildContext context, String elderId) {
+  Widget _buildElderCard(
+    BuildContext context,
+    String elderId, {
+    required bool isFirst,
+  }) {
     return StreamBuilder<DocumentSnapshot>(
       stream: FirebaseFirestore.instance
           .collection('users')
@@ -558,7 +809,35 @@ class CaregiverHomePage extends StatelessWidget {
               'yyyy-MM-dd',
             ).format(DateTime.now());
 
-            return Container(
+            final bool showNudgeIcon = totalMeds > 0 && takenMeds < totalMeds;
+
+            final Widget nudgeIcon = InkWell(
+              onTap: () {
+                if (_onboardingTourActive) return;
+                final currentUser = FirebaseAuth.instance.currentUser;
+                String caregiverName =
+                    currentUser?.displayName ?? "Yakınınız";
+                _sendNudgeNotification(context, elderId, caregiverName);
+              },
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEF5350).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.notifications_active_rounded,
+                  color: Color(0xFFEF5350),
+                  size: 20,
+                ),
+              ),
+            );
+
+            final Widget elderCard = Container(
               margin: const EdgeInsets.only(bottom: 16),
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -690,37 +969,33 @@ class CaregiverHomePage extends StatelessWidget {
                           ],
                         ),
                       ),
-                      if (totalMeds > 0 && takenMeds < totalMeds) ...[
+                      if (showNudgeIcon) ...[
                         const SizedBox(width: 16),
-                        InkWell(
-                          onTap: () {
-                            final currentUser =
-                                FirebaseAuth.instance.currentUser;
-                            String caregiverName =
-                                currentUser?.displayName ?? "Yakınınız";
-                            _sendNudgeNotification(
-                              context,
-                              elderId,
-                              caregiverName,
-                            );
-                          },
-                          borderRadius: BorderRadius.circular(12),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 8,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFEF5350).withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Icon(
-                              Icons.notifications_active_rounded,
-                              color: Color(0xFFEF5350),
-                              size: 20,
-                            ),
-                          ),
-                        ),
+                        // Dürtme (zil) ikonu SADECE bu yakının o gün
+                        // bekleyen bir ilacı varsa render ediliyor - kartın
+                        // (her zaman mevcut) aksine "all-or-nothing" değil.
+                        // Bu yüzden dalga 2'nin bayrağı bu adıma değil, kart
+                        // adımına bağlı - bkz. OnboardingFlags dokümantasyonu.
+                        isFirst
+                            ? Showcase.withWidget(
+                                key: _nudgeIconShowcaseKey,
+                                scope: _caregiverHomeTourScope,
+                                targetPadding: const EdgeInsets.all(4),
+                                container: OnboardingTooltipCard(
+                                  title: "Hatırlatma Gönder",
+                                  description:
+                                      "Yakının bir ilacını almayı unuttuysa "
+                                      "bu zile dokunarak ona bir hatırlatma "
+                                      "bildirimi gönderebilirsin.",
+                                  buttonLabel: "Anladım",
+                                  onNext: () =>
+                                      _homeTourView.next(force: true),
+                                  showCloseButton: _onboardingTourIsManual,
+                                  onClose: () => _homeTourView.dismiss(),
+                                ),
+                                child: nudgeIcon,
+                              )
+                            : nudgeIcon,
                       ],
                     ],
                   ),
@@ -751,6 +1026,29 @@ class CaregiverHomePage extends StatelessWidget {
                 ],
               ),
             );
+
+            // İlk (index 0) yakın kartı onboarding turunun 3. adımının
+            // (elderCard) spotlight hedefi - liste her zaman en az bu kartı
+            // içerdiğinde (relationCount > 0) hedef garanti mevcut.
+            return isFirst
+                ? Showcase.withWidget(
+                    key: _elderCardShowcaseKey,
+                    scope: _caregiverHomeTourScope,
+                    targetPadding: const EdgeInsets.all(4),
+                    container: OnboardingTooltipCard(
+                      title: "Yakının Durumu",
+                      description:
+                          "Her kart bir yakınının bugünkü ilaç durumunu "
+                          "gösterir - kaç ilacını aldığını, puanını ve "
+                          "ilaç listesini buradan takip edebilirsin.",
+                      buttonLabel: "Anladım",
+                      onNext: () => _homeTourView.next(force: true),
+                      showCloseButton: _onboardingTourIsManual,
+                      onClose: () => _homeTourView.dismiss(),
+                    ),
+                    child: elderCard,
+                  )
+                : elderCard;
           },
         );
       },
@@ -980,8 +1278,134 @@ class CaregiverHomePage extends StatelessWidget {
   }
 }
 
-class CaregiverProfilePage extends StatelessWidget {
+class CaregiverProfilePage extends StatefulWidget {
   const CaregiverProfilePage({super.key});
+
+  @override
+  State<CaregiverProfilePage> createState() => _CaregiverProfilePageState();
+}
+
+class _CaregiverProfilePageState extends State<CaregiverProfilePage> {
+  // --- Onboarding turu (Caregiver Profil) ----------------------------------
+  // Tek adımlı - elder Profil'deki bağlantı kodu turuyla aynı desen (bkz.
+  // profile_page.dart → _profileTourScope).
+  static const String _caregiverProfileTourScope =
+      'caregiver_profile_onboarding';
+  final GlobalKey _manageElderlyShowcaseKey = GlobalKey();
+  late final ShowcaseView _profileTourView;
+  bool _hasCheckedCaregiverProfileOnboarding = false;
+  bool _onboardingTourActive = false;
+  bool _onboardingTourIsManual = false;
+
+  void _setOnboardingTourActive(bool active, {bool manual = false}) {
+    _onboardingTourActive = active;
+    _onboardingTourIsManual = manual;
+    onboardingTourActiveNotifier.value = active;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _profileTourView = ShowcaseView.register(
+      scope: _caregiverProfileTourScope,
+      disableBarrierInteraction: true,
+      skipIfTargetNotPresent: true,
+      onComplete: (index, key) {
+        if (mounted) setState(() => _setOnboardingTourActive(false));
+        final uid = FirebaseAuth.instance.currentUser?.uid;
+        if (uid != null) {
+          OnboardingFlags.markCompleted(uid, OnboardingFlags.caregiverProfile);
+        }
+      },
+      onFinish: () {
+        if (mounted) setState(() => _setOnboardingTourActive(false));
+      },
+      onDismiss: (_) {
+        if (mounted) setState(() => _setOnboardingTourActive(false));
+      },
+    );
+  }
+
+  /// userSnapshot verisi ilk kez geldiğinde bir kez çağrılır - bu sayfadaki
+  /// StreamBuilder her alan güncellemesinde yeniden tetiklendiği için
+  /// `_hasCheckedCaregiverProfileOnboarding` bayrağı turun tekrar tekrar
+  /// başlamasını önler.
+  void _maybeStartCaregiverProfileOnboarding(Map<String, dynamic> userData) {
+    if (_hasCheckedCaregiverProfileOnboarding) return;
+    _hasCheckedCaregiverProfileOnboarding = true;
+    if (OnboardingFlags.isCompletedFromData(
+      userData,
+      OnboardingFlags.caregiverProfile,
+    )) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() => _setOnboardingTourActive(true));
+      _profileTourView.startShowCase([_manageElderlyShowcaseKey]);
+    });
+  }
+
+  /// "Tekrar Öğren" satırı - Home'daki "Yardım Al" gibi yedek bir erişim
+  /// noktası, kullanıcı Profil'e gelmişken bu turu tekrar görmek isterse.
+  void _startCaregiverProfileTourManually() {
+    setState(() => _setOnboardingTourActive(true, manual: true));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _profileTourView.startShowCase([_manageElderlyShowcaseKey]);
+    });
+  }
+
+  @override
+  void dispose() {
+    _profileTourView.unregister();
+    if (_onboardingTourActive) {
+      onboardingTourActiveNotifier.value = false;
+    }
+    super.dispose();
+  }
+
+  /// "Tekrar Öğren" satırı - elder Profil'deki `_buildHelpRow` ile aynı
+  /// görsel dil (mor/lavanta ikon, aynı ListTile deseni) - caregiver
+  /// tarafında ayrı bir "ayarlar listesi" widget'ı olmadığı için burada
+  /// tek başına, kendi kartında.
+  Widget _buildHelpRow(String label, String subtitle, VoidCallback onTap) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: ListTile(
+        onTap: onTap,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 4,
+        ),
+        leading: const Icon(
+          Icons.replay_circle_filled_rounded,
+          color: AppColors.helpAccent,
+        ),
+        title: Text(
+          label,
+          style: GoogleFonts.poppins(
+            fontSize: 14,
+            color: Colors.black87,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        subtitle: Text(
+          subtitle,
+          style: GoogleFonts.poppins(
+            fontSize: 13,
+            color: AppColors.textSecondaryStrong,
+          ),
+        ),
+        trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -998,6 +1422,7 @@ class CaregiverProfilePage extends StatelessWidget {
         if (userSnap.hasData && userSnap.data!.exists) {
           var data = userSnap.data!.data() as Map<String, dynamic>;
           profileName = data['name']?.toString().trim() ?? "Bakıcı Hesabı";
+          _maybeStartCaregiverProfileOnboarding(data);
         }
 
         return SingleChildScrollView(
@@ -1034,189 +1459,230 @@ class CaregiverProfilePage extends StatelessWidget {
                   color: AppColors.textSecondaryStrong,
                 ),
               ),
-              const SizedBox(height: 40),
+              const SizedBox(height: 32),
               Align(
                 alignment: Alignment.centerLeft,
-                child: Text(
-                  "Takip Edilenleri Yönet",
-                  style: GoogleFonts.poppins(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: const Color(0xFF37474F),
-                  ),
+                child: _buildHelpRow(
+                  "Tekrar Öğren",
+                  "'Takip Edilenleri Yönet' turunu tekrar izle",
+                  _startCaregiverProfileTourManually,
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
 
-              StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance
-                    .collection('relations')
-                    .where('caregiverId', isEqualTo: currentUser.uid)
-                    .where('status', isEqualTo: 'approved')
-                    .snapshots(),
-                builder: (context, snapshot) {
-                  // 🔥 PROFİL SAYFASINDAKİ ÇARKLAR DA İSKELETE DÖNÜŞTÜ
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return Shimmer.fromColors(
-                      baseColor: Colors.grey.shade300,
-                      highlightColor: Colors.grey.shade100,
-                      child: Column(
-                        children: List.generate(
-                          2,
-                          (index) => Container(
-                            margin: const EdgeInsets.only(bottom: 12),
-                            height: 70,
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  }
-
-                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                    return Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.grey.shade200),
-                      ),
+              Showcase.withWidget(
+                key: _manageElderlyShowcaseKey,
+                scope: _caregiverProfileTourScope,
+                targetPadding: const EdgeInsets.all(4),
+                container: OnboardingTooltipCard(
+                  title: "Takip Edilenleri Yönet",
+                  description:
+                      "Takip ettiğin kişileri burada görebilir, "
+                      "istediğinde birini takipten çıkarabilirsin.",
+                  buttonLabel: "Anladım",
+                  onNext: () => _profileTourView.next(force: true),
+                  showCloseButton: _onboardingTourIsManual,
+                  onClose: () => _profileTourView.dismiss(),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Align(
+                      alignment: Alignment.centerLeft,
                       child: Text(
-                        "Henüz kimseyi takip etmiyorsunuz.",
-                        textAlign: TextAlign.center,
+                        "Takip Edilenleri Yönet",
                         style: GoogleFonts.poppins(
-                          color: AppColors.textSecondaryStrong,
                           fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: const Color(0xFF37474F),
                         ),
                       ),
-                    );
-                  }
+                    ),
+                    const SizedBox(height: 12),
 
-                  return ListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: snapshot.data!.docs.length,
-                    itemBuilder: (context, index) {
-                      var relationDoc = snapshot.data!.docs[index];
-                      String elderId = relationDoc['elderId'];
-                      String docId = relationDoc.id;
+                    StreamBuilder<QuerySnapshot>(
+                      stream: FirebaseFirestore.instance
+                          .collection('relations')
+                          .where('caregiverId', isEqualTo: currentUser.uid)
+                          .where('status', isEqualTo: 'approved')
+                          .snapshots(),
+                      builder: (context, snapshot) {
+                        // 🔥 PROFİL SAYFASINDAKİ ÇARKLAR DA İSKELETE DÖNÜŞTÜ
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return Shimmer.fromColors(
+                            baseColor: Colors.grey.shade300,
+                            highlightColor: Colors.grey.shade100,
+                            child: Column(
+                              children: List.generate(
+                                2,
+                                (index) => Container(
+                                  margin: const EdgeInsets.only(bottom: 12),
+                                  height: 70,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        }
 
-                      return FutureBuilder<DocumentSnapshot>(
-                        future: FirebaseFirestore.instance
-                            .collection('users')
-                            .doc(elderId)
-                            .get(),
-                        builder: (context, userSnapshot) {
-                          if (!userSnapshot.hasData) return const SizedBox();
-                          var elderData =
-                              userSnapshot.data!.data()
-                                  as Map<String, dynamic>?;
-                          if (elderData == null) return const SizedBox();
-
-                          String elderName =
-                              elderData['name'] ??
-                              elderData['email'] ??
-                              "Kullanıcı";
-
+                        if (!snapshot.hasData ||
+                            snapshot.data!.docs.isEmpty) {
                           return Container(
-                            margin: const EdgeInsets.only(bottom: 12),
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
                               color: Colors.white,
                               borderRadius: BorderRadius.circular(16),
                               border: Border.all(color: Colors.grey.shade200),
                             ),
-                            child: ListTile(
-                              leading: const CircleAvatar(
-                                backgroundColor: Color(0xFFE8EAF6),
-                                child: Icon(
-                                  Icons.elderly,
-                                  color: Color(0xFF3949AB),
-                                ),
-                              ),
-                              title: Text(
-                                elderName,
-                                style: GoogleFonts.poppins(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 14,
-                                ),
-                              ),
-                              subtitle: Text(
-                                "Takipte",
-                                style: TextStyle(
-                                  color: Colors.green[700],
-                                  fontSize: 15,
-                                ),
-                              ),
-                              trailing: IconButton(
-                                icon: const Icon(
-                                  Icons.person_remove_rounded,
-                                  color: Colors.redAccent,
-                                ),
-                                onPressed: () {
-                                  showDialog(
-                                    context: context,
-                                    builder: (context) => AlertDialog(
-                                      backgroundColor: Colors.white,
-                                      title: const Text("Takipten Çık"),
-                                      content: Text(
-                                        "$elderName adlı kişiyi takip etmeyi bırakmak istiyor musunuz?",
-                                      ),
-                                      actions: [
-                                        TextButton(
-                                          onPressed: () =>
-                                              Navigator.pop(context),
-                                          child: const Text(
-                                            "İptal",
-                                            style: TextStyle(
-                                              color: Colors.grey,
-                                            ),
-                                          ),
-                                        ),
-                                        ElevatedButton(
-                                          onPressed: () async {
-                                            await FirebaseFirestore.instance
-                                                .collection('relations')
-                                                .doc(docId)
-                                                .delete();
-                                            if (context.mounted) {
-                                              Navigator.pop(context);
-                                              ScaffoldMessenger.of(
-                                                context,
-                                              ).showSnackBar(
-                                                const SnackBar(
-                                                  content: Text(
-                                                    "Takipten çıkıldı.",
-                                                  ),
-                                                ),
-                                              );
-                                            }
-                                          },
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: Colors.redAccent,
-                                          ),
-                                          child: const Text(
-                                            "Çıkar",
-                                            style: TextStyle(
-                                              color: Colors.white,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                },
+                            child: Text(
+                              "Henüz kimseyi takip etmiyorsunuz.",
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.poppins(
+                                color: AppColors.textSecondaryStrong,
+                                fontSize: 16,
                               ),
                             ),
                           );
-                        },
-                      );
-                    },
-                  );
-                },
+                        }
+
+                        return ListView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: snapshot.data!.docs.length,
+                          itemBuilder: (context, index) {
+                            var relationDoc = snapshot.data!.docs[index];
+                            String elderId = relationDoc['elderId'];
+                            String docId = relationDoc.id;
+
+                            return FutureBuilder<DocumentSnapshot>(
+                              future: FirebaseFirestore.instance
+                                  .collection('users')
+                                  .doc(elderId)
+                                  .get(),
+                              builder: (context, userSnapshot) {
+                                if (!userSnapshot.hasData) {
+                                  return const SizedBox();
+                                }
+                                var elderData =
+                                    userSnapshot.data!.data()
+                                        as Map<String, dynamic>?;
+                                if (elderData == null) {
+                                  return const SizedBox();
+                                }
+
+                                String elderName =
+                                    elderData['name'] ??
+                                    elderData['email'] ??
+                                    "Kullanıcı";
+
+                                return Container(
+                                  margin: const EdgeInsets.only(bottom: 12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(
+                                      color: Colors.grey.shade200,
+                                    ),
+                                  ),
+                                  child: ListTile(
+                                    leading: const CircleAvatar(
+                                      backgroundColor: Color(0xFFE8EAF6),
+                                      child: Icon(
+                                        Icons.elderly,
+                                        color: Color(0xFF3949AB),
+                                      ),
+                                    ),
+                                    title: Text(
+                                      elderName,
+                                      style: GoogleFonts.poppins(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                    subtitle: Text(
+                                      "Takipte",
+                                      style: TextStyle(
+                                        color: Colors.green[700],
+                                        fontSize: 15,
+                                      ),
+                                    ),
+                                    trailing: IconButton(
+                                      icon: const Icon(
+                                        Icons.person_remove_rounded,
+                                        color: Colors.redAccent,
+                                      ),
+                                      onPressed: () {
+                                        showDialog(
+                                          context: context,
+                                          builder: (context) => AlertDialog(
+                                            backgroundColor: Colors.white,
+                                            title: const Text("Takipten Çık"),
+                                            content: Text(
+                                              "$elderName adlı kişiyi takip etmeyi bırakmak istiyor musunuz?",
+                                            ),
+                                            actions: [
+                                              TextButton(
+                                                onPressed: () =>
+                                                    Navigator.pop(context),
+                                                child: const Text(
+                                                  "İptal",
+                                                  style: TextStyle(
+                                                    color: Colors.grey,
+                                                  ),
+                                                ),
+                                              ),
+                                              ElevatedButton(
+                                                onPressed: () async {
+                                                  await FirebaseFirestore
+                                                      .instance
+                                                      .collection('relations')
+                                                      .doc(docId)
+                                                      .delete();
+                                                  if (context.mounted) {
+                                                    Navigator.pop(context);
+                                                    ScaffoldMessenger.of(
+                                                      context,
+                                                    ).showSnackBar(
+                                                      const SnackBar(
+                                                        content: Text(
+                                                          "Takipten çıkıldı.",
+                                                        ),
+                                                      ),
+                                                    );
+                                                  }
+                                                },
+                                                style:
+                                                    ElevatedButton.styleFrom(
+                                                      backgroundColor:
+                                                          Colors.redAccent,
+                                                    ),
+                                                child: const Text(
+                                                  "Çıkar",
+                                                  style: TextStyle(
+                                                    color: Colors.white,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                );
+                              },
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 48),
               SizedBox(

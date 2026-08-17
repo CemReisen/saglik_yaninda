@@ -36,6 +36,31 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 /// edilir — bilinçli karar: bu özellik öncesi açılmış hesaplar da turu bir
 /// kereliğine görür (auth sistemindeki "alan yoksa X kabul et" dersiyle aynı
 /// yaklaşım, bkz. CLAUDE.md → "Auth Sistemi Yenilendi").
+///
+/// **Caregiver tarafı** (2026-08-17 eklendi) — elder'daki aynı iki-dalgalı
+/// desenin caregiver muadili, ayrı alan adlarıyla (aynı `users/{uid}`
+/// dokümanı hem elder hem caregiver rolü için kullanıldığından, iki tarafın
+/// bayrakları birbirine karışmasın diye `caregiver` önekiyle ayrıştırıldı —
+/// bir hesap rol değiştirmiş olsa bile eski rolün bayrakları anlamsız kalıp
+/// yanlışlıkla "tamamlandı" sayılmaz):
+///
+/// - **Dalga 1 (`caregiverHomeIntro`):** "Yeni Yakın" + "Yardım Al" butonları.
+///   İkisi de her zaman render edilir (bağlı kimse olmasa da) - skip riski
+///   yok. Bayrak, dalganın SON adımında (Yardım Al) yazılır.
+/// - **Dalga 2 (`caregiverHomeElder`):** Yakın kartı + dürtme (zil) ikonu.
+///   Hedefleri elder'daki gibi "all-or-nothing" DEĞİL: yakın kartı en az 1
+///   onaylı bağlantı varsa her zaman mevcut, ama zil ikonu SADECE o yakının
+///   o gün bekleyen (alınmamış) bir ilacı varsa render ediliyor - kartın
+///   aksine hiçbir zaman garanti değil. Bilinçli tasarım kararı: bayrak,
+///   İçtim'deki gibi dizinin SON adımında değil, **kart adımında** yazılır
+///   (`caregiver_home_page.dart` → `ShowcaseView.register`'daki `onComplete`)
+///   - zil ikonu aynı çalıştırmada hâlâ (mevcutsa) gösteriliyor, ama flag'in
+///   ona bağlı olmaması "caregiver'ın yakını(ları) o an hiç bekleyen ilaç
+///   yoksa mini-tur her Home ziyaretinde sonsuza kadar sessizce yeniden
+///   dener" riskini ortadan kaldırıyor - zil ikonu için yedek erişim zaten
+///   "Yardım Al" ile manuel tekrarda hep mevcut.
+/// - **`caregiverProfile`:** "Takip Edilenleri Yönet" - tek adımlı, elder
+///   Profil'deki bağlantı kodu turuyla aynı desen.
 class OnboardingFlags {
   OnboardingFlags._();
 
@@ -43,6 +68,13 @@ class OnboardingFlags {
   static const String homeMeds = 'onboardingHomeMedsCompleted';
   static const String add = 'onboardingAddCompleted';
   static const String profile = 'onboardingProfileCompleted';
+
+  static const String caregiverHomeIntro =
+      'onboardingCaregiverHomeIntroCompleted';
+  static const String caregiverHomeElder =
+      'onboardingCaregiverHomeElderCompleted';
+  static const String caregiverProfile =
+      'onboardingCaregiverProfileCompleted';
 
   /// Zaten elde bulunan bir user doküman map'inden (ör. bir StreamBuilder'ın
   /// snapshot'ından) okuma yapar — ekstra bir Firestore sorgusu gerekmez.
