@@ -101,6 +101,8 @@ Yerine kurulan sistem **2026-08-09/10'da uygulanıp uçtan uca test edildi** (`u
 2. **E-posta ile Giriş** — mevcut sistem, değişmedi.
 3. **Google ile Giriş** — ücretsiz, bazı yaşlı kullanıcıların zaten alışkın olabileceği bir yöntem. İlk girişte elder/caregiver rolü soruluyor (Google girişi ikisinden de gelebiliyor, register akışındaki gibi sabit bir rol varsayılamıyor).
 
+**Küçük UX düzeltmesi (2026-08-17):** E-posta ile kayıt olan caregiver akışına giden "Kayıt Olun" linki eskiden sayfanın en altındaydı (kaydırmadan görünmüyordu) — "Kodum var"ın hemen altına taşınarak görünürlüğü artırıldı. Teknik detaylar `CLAUDE.md` → "Login Ekranı Düzenlemeleri" bölümünde.
+
 ### Kurtarma Akışı (Telefon/Uygulama Değişikliği Durumunda)
 1. Yeni cihazda uygulama açılır, "Kodum var" seçilir.
 2. Kullanıcı kurtarma kodunu girer.

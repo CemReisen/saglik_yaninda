@@ -262,3 +262,21 @@ Hedef: "Takip Edilenleri Yönet" başlığı + liste (elder Profil'deki bağlant
 `CaregiverLayout`'un alt navbar'ı (home.svg/profile.svg, 2 sekme) artık `home_tour_shared.dart`'taki paylaşılan `onboardingTourActiveNotifier`'ı kontrol ediyor — herhangi bir caregiver turu açıkken sekme değişimine izin verilmiyor. Bu, elder tarafında `main.dart` → `MainLayout`'un aynı notifier'ı zaten kontrol etmesinin gerekçesiyle birebir aynı: showcaseview'ın hedef overlay'i varsayılan olarak translucent olduğu için, tur açıkken gerçek bir sekme dokunuşu spotlight'lanan widget'a da ulaşıp o an tur gösteren sayfayı ortasında unmount edip overlay'i sahipsiz bırakabilirdi. İki rol aynı anda hiç mount edilmediği için (kullanıcı ya elder ya caregiver layout'unu görür) paylaşılan tek global notifier'ı iki tarafın da kullanması güvenli — ayrı bir caregiver-özel notifier'a gerek yok.
 
 **Doğrulama:** `flutter analyze` — 0 yeni hata, 96 info (öncekiyle aynı `withOpacity` deseninin tekrarı). Kullanıcı gerçek cihazda test etti — 4 adımlı tur, dalga 1/dalga 2 ayrımı, zil ikonu davranışı, "Yardım Al" ile manuel tekrar, navbar tur-kilidi ve Profil "Tekrar Öğren" satırı hepsi sorunsuz çalıştı, onayladı.
+
+## Login Ekranı Düzenlemeleri (2026-08-17, aynı gün)
+
+Caregiver onboarding turuyla aynı oturumda, `ui-redesign` dalında, 3 commit + 1 doğrulama turu.
+
+**Amaç:** E-posta ile kayıt olan caregiver akışı (`register_page.dart`'a giden link) sayfanın alt kısmında kalıyor, kaydırmadan görünmüyordu — doğru kullanıcının (caregiver) bunu fark etmesini kolaylaştırmak.
+
+1. **`dfdeca4` (denendi, sonra geri alındı):** "Kodum var" linkinin altına "Yakınınızı mı takip edeceksiniz? Aşağıdan hesap oluşturun" ipucu metni eklendi (tıklanamaz, sade). Kullanıcı gerçek cihazda test edip **işe yaramadığına karar verdi** — sonraki commit'te kaldırıldı.
+2. **`d58d935`:** İpucu metni kaldırıldı. Onun yerine, sayfanın en altında (Google butonunun altında, kaydırmadan görünmeyen bir konumda) duran **"Hesabınız yok mu? Kayıt Olun"** linki **"Kodum var"ın hemen altına** taşındı — link davranışı (`register_page.dart`'a yönlendirme) değişmedi, sadece konumu.
+3. **`e2e0cc2`:** Bu taşıma, Google butonunu ~50-60px aşağı itip foldun (kaydırmadan görünen alan) dışına çıkardı. Kalkan ikonuna/marka görselliğine dokunmadan, 6 `SizedBox` küçültüldü (kalkan→Hızlı Başla: 40→26, checkbox satırı→Giriş Yap: 30→22, Giriş Yap→veya: 20→15, veya→Google: 20→15, Kodum var→Kayıt Olun: 16→10, Kayıt Olun→veya: 24→16) — toplam ~46px geri kazanıldı.
+4. **Doğrulama (kod değişikliği yapılmadı, sadece test):** Emülatörde sistem navigasyonu 3 butonlu moda (`adb shell cmd overlay enable com.android.internal.systemui.navbar.threebutton`) geçirilip güncel kod `flutter build apk --debug` + `adb install -r` ile taze kurulup gerçek cihaz davranışı gözlemlendi (bkz. not: emülatörde önceden kurulu APK bu turun commit'lerinden ÖNCEYDİ, taze build/install gerekti, aksi halde test yanlış sonuç verirdi). Sonuç: `SafeArea` 3 butonlu modda doğru çalışıyor — hiçbir eleman nav bar'ın arkasında kalmıyor/kesilmiyor, Google butonu hiç kaydırmadan neredeyse tam görünür (~20dp'lik bir kaydırmayla tamamen), kritik bir sorun yok. Test sonrası emülatör gestural moda geri alındı.
+
+**Doğrulama:** `flutter analyze` — her commit'te 0 yeni hata/uyarı (96 info, öncekiyle aynı desenin tekrarı).
+
+## Açık Kalan İşler (bir sonraki oturumun başında hatırlanmalı)
+
+1. **Hızlı Başla (elder) × Google/email (caregiver) bildirim çapraz testi — HENÜZ YAPILMADI.** Hızlı Başla ile açılmış bir elder hesabının, Google/email ile açılmış bir caregiver hesabına bağlanması ve bildirimlerin (bağlantı isteği, ilaç alındı, SOS, dürtme) bu yeni auth yöntemleriyle açılmış hesaplarda da uçtan uca çalıştığının doğrulanması gerekiyor. Çift cihaz/hesap gerektiriyor (bkz. PRODUCT_NOTES.md → "4. Elder Kayıt / Giriş Akışı").
+2. **`ui-redesign` → `main` merge kararı — HENÜZ VERİLMEDİ.** Kullanıcı, UI işi bitmeden merge etmenin gereksiz olduğunu belirtti — bilinçli olarak ertelendi, aceleye getirilmemeli.
