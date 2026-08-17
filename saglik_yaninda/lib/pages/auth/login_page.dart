@@ -463,6 +463,21 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                   ),
                 ),
+                const SizedBox(height: 12),
+                // Yönlendirici ipucu (tıklanabilir DEĞİL, sade bir metin) -
+                // caregiver akışı (e-posta ile kayıt) sayfanın alt kısmında
+                // kalıyor, kaydırmadan görünmüyor. "Hızlı Başla" ve "Kodum
+                // var" elder'a hitap ediyor - bu metin, doğru kullanıcıyı
+                // (caregiver) aşağı kaydırmaya teşvik eden bir ipucu.
+                Text(
+                  "Yakınınızı mı takip edeceksiniz? Aşağıdan hesap oluşturun",
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    fontStyle: FontStyle.italic,
+                    color: Colors.grey[500],
+                  ),
+                ),
 
                 const SizedBox(height: 24),
 
