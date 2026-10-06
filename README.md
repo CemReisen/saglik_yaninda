@@ -52,29 +52,29 @@
 
 Projeyi kendi bilgisayarınızda derlemek ve çalıştırmak için aşağıdaki adımları izleyebilirsiniz:
 
-1.  **Repoyu Klonlayın:**
-    ```bash
-    git clone [https://github.com/CemReisen/saglik_yaninda.git](https://github.com/CemReisen/saglik_yaninda.git)
-    cd saglik_yaninda
-    ```
+1. **Repoyu klonlayın:**
 
-2.  **Bağımlılıkları Yükleyin:**
-    ```bash![profilePage](https://github.com/user-attachments/assets/e63854cc-f0ba-44fa-ae26-fd50171c499f)
+```bash
+git clone https://github.com/CemReisen/saglik_yaninda.git
+cd saglik_yaninda
+```
 
+2. **Bağımlılıkları yükleyin:**
 
+```bash
+flutter pub get
+```
 
-    flutter pub get![Uploading profilePage.jpeg…]()
+3. **Firebase yapılandırması:**
 
-    ```
+   - Bu proje Firebase kullanmaktadır. Kendi veritabanınızı bağlamak için Firebase Console üzerinden bir proje oluşturun.
+   - `google-services.json` (Android) ve `GoogleService-Info.plist` (iOS) dosyalarını ilgili dizinlere yerleştirin.
 
-3.  **Firebase Yapılandırması:**
-    * Bu proje Firebase kullanmaktadır. Kendi veritabanınızı bağlamak için Firebase Console üzerinden bir proje oluşturun.
-    * `google-services.json` (Android) ve `GoogleService-Info.plist` (iOS) dosyalarını ilgili dizinlere yerleştirin.
+4. **Projeyi çalıştırın:**
 
-4.  **Projeyi Çalıştırın:**
-    ```bash
-    flutter run
-    ```
+```bash
+flutter run
+```
 
 ## 🧠 Gelecek Hedefleri (Roadmap)
 * **Yapay Zekâ Asistanı:** OpenAI veya Hugging Face API entegrasyonu ile yaşlı kullanıcılara kişiselleştirilmiş haftalık sağlık özetleri ve motivasyon bildirimleri gönderilmesi.
